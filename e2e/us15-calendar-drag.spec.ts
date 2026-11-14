@@ -176,3 +176,41 @@ test('시각 알림이 있는 일정을 하루 종일로 옮겨도 저장되고,
   dialog = page.getByRole('dialog', { name: '할 일 수정' });
   await expect(dialog.getByRole('checkbox', { name: /10분 전/ })).toBeChecked();
 });
+
+test('주 보기: 블록에 마우스를 올려 ×를 누르면 삭제되고, 실행 취소로 돌아온다 (수정 창·만들기 창은 열리지 않는다)', async ({ page }) => {
+  await openApp(page);
+  await addTimed(page, '지울 일정', '13:00', '1시간');
+  await openCalendar(page, '주');
+  const del = page.getByRole('button', { name: '지울 일정 삭제' });
+  await expect(del).toHaveCSS('opacity', '0'); // 평소에는 보이지 않는다
+  await block(page, '지울 일정').hover();
+  await expect(del).toHaveCSS('opacity', '1');
+  await del.click();
+  await expect(page.locator('.tg-block', { hasText: '지울 일정' })).toHaveCount(0);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByText('삭제했어요')).toBeVisible();
+  await page.getByRole('button', { name: '실행 취소' }).click();
+  await expect(block(page, '지울 일정')).toHaveCSS('top', `${13 * HOUR}px`);
+});
+
+test('블록에 포커스를 두고 Delete 키를 누르면 삭제된다 (키보드 사용자용)', async ({ page }) => {
+  await openApp(page);
+  await addTimed(page, '키보드로 지움', '10:00', '1시간');
+  await addTimed(page, '남을 일정', '15:00', '1시간');
+  await openCalendar(page, '주');
+  await block(page, '키보드로 지움').focus();
+  await page.keyboard.press('Delete');
+  await expect(page.locator('.tg-block', { hasText: '키보드로 지움' })).toHaveCount(0);
+  await expect(block(page, '남을 일정')).toBeVisible(); // 다른 일정은 그대로
+  await page.getByRole('button', { name: '실행 취소' }).click();
+  await expect(block(page, '키보드로 지움')).toBeVisible();
+});
+
+test('하루 종일 칩도 Delete 키로 삭제할 수 있다', async ({ page }) => {
+  await openApp(page);
+  await addTimed(page, '종일 일정', null, null);
+  await openCalendar(page, '주');
+  await page.locator('.tg-chip', { hasText: '종일 일정' }).focus();
+  await page.keyboard.press('Backspace');
+  await expect(page.locator('.tg-chip', { hasText: '종일 일정' })).toHaveCount(0);
+});

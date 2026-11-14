@@ -175,6 +175,7 @@ export function enableGridInteractions(app: App, scroller: HTMLElement, o: GridO
   scroller.addEventListener('pointerdown', (ev) => {
     if (ev.button !== 0 || !ev.isPrimary) return;
     const target = ev.target as HTMLElement;
+    if (target.closest('.tg-del')) return; // 삭제 버튼은 끌기·만들기를 시작하지 않는다
 
     const block = target.closest<HTMLElement>('.tg-block.movable');
     if (block) return startBlockGesture(ev, block, target.closest('.tg-resize') !== null);

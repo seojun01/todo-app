@@ -88,6 +88,7 @@ export async function renderTimeGrid(app: App, root: HTMLElement, o: TimeGridOpt
         draggable: kind === 'task' ? 'true' : null,
         'data-key': `${kind === 'ghost' ? 'tg-ghost' : 'tg-task'}:${t.id}`,
         onclick: (ev: Event) => openTaskEditor(app, { task: t, opener: ev.currentTarget as HTMLElement }),
+        onkeydown: kind === 'ghost' ? null : (ev: Event) => onDeleteKey(app, t, ev as KeyboardEvent),
       },
       kind === 'ghost' ? h('span', { 'aria-hidden': 'true' }, '↻ ') : null,
       t.done ? h('span', { 'aria-hidden': 'true' }, '✓ ') : null,
@@ -160,8 +161,7 @@ export async function renderTimeGrid(app: App, root: HTMLElement, o: TimeGridOpt
       const t = it.task;
       const label: ProjectLabel = labels.get(t.projectId) ?? labels.get('inbox')!;
       const ghost = it.kind === 'ghost';
-      col.appendChild(
-        h(
+      const blockEl = h(
           'button',
           {
             type: 'button',
@@ -175,13 +175,31 @@ export async function renderTimeGrid(app: App, root: HTMLElement, o: TimeGridOpt
             'data-key': `${ghost ? 'tg-ghost' : 'tg-task'}:${t.id}:${date}`,
             title: `${t.title} · ${range}`,
             onclick: (ev: Event) => openTaskEditor(app, { task: t, opener: ev.currentTarget as HTMLElement }),
+            onkeydown: ghost ? null : (ev: Event) => onDeleteKey(app, t, ev as KeyboardEvent),
           },
           h('span', { class: 'tg-title' }, ghost ? h('span', { 'aria-hidden': 'true' }, '↻ ') : null, t.done ? h('span', { 'aria-hidden': 'true' }, '✓ ') : null, t.title),
           height >= 38 ? h('span', { class: 'tg-time' }, shownTime) : null,
           h('span', { class: 'sr-only' }, ` (${range}${t.done ? ', 완료' : ''}${ghost ? ', 반복 예정' : ''}, ${label.name})`),
           ghost ? null : h('span', { class: 'tg-resize', 'aria-hidden': 'true', title: '끌어서 길이 바꾸기' }),
-        ),
-      );
+        );
+      col.appendChild(blockEl);
+      if (!ghost) {
+        // 마우스를 올리거나 포커스를 두면 나타나는 삭제 버튼 (블록 안에 버튼을 넣을 수 없어 형제로 둔다)
+        col.appendChild(
+          h(
+            'button',
+            {
+              type: 'button',
+              class: 'tg-del',
+              'aria-label': `${t.title} 삭제`,
+              'data-key': `tg-del:${t.id}:${date}`,
+              style: `top:${top + 2}px;left:calc(${p.col + 1} * 100% / ${p.cols} - 24px)`,
+              onclick: () => void removeTask(app, t),
+            },
+            '×',
+          ),
+        );
+      }
     }
     if (date === o.today) {
       const line = h('div', { class: 'tg-now', 'aria-hidden': 'true', style: `top:${(nowMin * HOUR_PX) / 60}px` });
@@ -212,6 +230,32 @@ export async function renderTimeGrid(app: App, root: HTMLElement, o: TimeGridOpt
   whenAttached(scroller, () => {
     scroller.scrollTop = savedScroll ?? initial;
   });
+}
+
+/** 할 일을 지우고 "실행 취소"를 보인다 (목록의 삭제와 같다) */
+async function removeTask(app: App, t: StoredTask): Promise<void> {
+  try {
+    const r = await app.tasks.deleteTask(t.id);
+    if (!r.ok) return;
+    await app.refresh();
+    app.toasts.show('삭제했어요', {
+      actionLabel: '실행 취소',
+      onAction: async () => {
+        await app.tasks.undoDelete();
+        await app.refresh();
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    app.toasts.show('삭제하지 못했어요. 저장 공간을 확인한 뒤 다시 시도해 주세요.', { duration: 8000 });
+  }
+}
+
+/** 블록·칩에 포커스를 둔 채 Delete(맥은 Backspace)를 누르면 지운다 */
+function onDeleteKey(app: App, t: StoredTask, ev: KeyboardEvent): void {
+  if (ev.key !== 'Delete' && ev.key !== 'Backspace') return;
+  ev.preventDefault();
+  void removeTask(app, t);
 }
 
 /** el 이 문서에 붙으면(최대 약 2초) 다음 프레임에 fn 을 실행한다 */

@@ -1304,3 +1304,32 @@ button.tg-block:hover {
 .tg-chip[draggable='true'] {
   cursor: grab;
 }
+
+/* 시간 격자: 블록 삭제 버튼 (마우스를 올리거나 포커스를 두면 나타난다) */
+.tg-del {
+  position: absolute;
+  z-index: 5;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.95rem;
+  line-height: 20px;
+  text-align: center;
+  cursor: pointer;
+  opacity: 0;
+}
+.tg-block.movable:hover + .tg-del,
+.tg-block.movable:focus-visible + .tg-del,
+.tg-del:hover,
+.tg-del:focus-visible {
+  opacity: 1;
+}
+.tg-del:hover {
+  background: var(--danger);
+  color: var(--bg);
+}
