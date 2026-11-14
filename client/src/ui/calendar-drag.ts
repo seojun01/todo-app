@@ -12,6 +12,7 @@ import { formatRange, formatShort } from '../format.ts';
 import type { StoredTask } from '../store/tasks.ts';
 import { h } from './dom.ts';
 import { openTaskEditor } from './task-editor.ts';
+import { beginDrag, endDrag } from './drag-guard.ts';
 import { TASK_DRAG_TYPE } from './task-list.ts';
 
 /** 마우스가 이만큼(px) 움직이면 끌기로 본다 */
@@ -114,6 +115,7 @@ export function enableGridInteractions(app: App, scroller: HTMLElement, o: GridO
     if (touch && hooks.touchNeedsHold !== false) {
       holdTimer = setTimeout(() => {
         active = true;
+        beginDrag();
         hooks.onStart();
         navigator.vibrate?.(10);
       }, LONG_PRESS_MS);
@@ -137,6 +139,7 @@ export function enableGridInteractions(app: App, scroller: HTMLElement, o: GridO
         }
         if (!far) return;
         active = true;
+        beginDrag();
         hooks.onStart();
       }
       hooks.onMove(e);
@@ -147,13 +150,18 @@ export function enableGridInteractions(app: App, scroller: HTMLElement, o: GridO
       if (wasActive) {
         swallowClick = true;
         setTimeout(() => (swallowClick = false), 0);
-        void hooks.onEnd(e);
+        const done = hooks.onEnd(e); // 미리보기를 걷어 내고 저장을 시작한다
+        endDrag(); // 끌기가 끝났으니 미뤄 둔 다시 그리기를 허용한다
+        void done;
       } else hooks.onTap?.(e);
     };
     const cancel = (): void => {
       const wasActive = active;
       finish();
-      if (wasActive) hooks.onCancel();
+      if (wasActive) {
+        hooks.onCancel();
+        endDrag();
+      }
     };
     // 터치로 끌기가 시작된 뒤에는 화면이 스크롤되지 않게 한다
     const blockScroll = (e: TouchEvent): void => {
@@ -167,7 +175,10 @@ export function enableGridInteractions(app: App, scroller: HTMLElement, o: GridO
     cancelActive = () => {
       const wasActive = active;
       finish();
-      if (wasActive) hooks.onCancel();
+      if (wasActive) {
+        hooks.onCancel();
+        endDrag();
+      }
     };
   }
 
@@ -324,8 +335,10 @@ export function enableGridInteractions(app: App, scroller: HTMLElement, o: GridO
     ev.dataTransfer?.setData('text/plain', chip.textContent ?? '');
     if (ev.dataTransfer) ev.dataTransfer.effectAllowed = 'move';
     chip.classList.add('dragging');
+    beginDrag();
   });
   scroller.addEventListener('dragend', () => {
+    endDrag();
     scroller.querySelectorAll('.dragging').forEach((el) => el.classList.remove('dragging'));
     scroller.querySelectorAll('.drop-target').forEach((el) => el.classList.remove('drop-target'));
   });

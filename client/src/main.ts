@@ -15,6 +15,7 @@ import { openProjectEditor } from './ui/projects.ts';
 import { createToasts } from './ui/undo-toast.ts';
 import { today } from '../../shared/calendar.ts';
 import { renderCalendar, resetCalendar } from './ui/calendar.ts';
+import { isDragging, noteSkippedRefresh, setOnDragIdle } from './ui/drag-guard.ts';
 import { renderPair } from './ui/pair.ts';
 import { renderProject } from './ui/project-view.ts';
 import { renderSettings } from './ui/settings.ts';
@@ -117,6 +118,11 @@ export async function boot(): Promise<App> {
   }
 
   async function render(navigated: boolean): Promise<void> {
+    // 끌고 있는 동안에는 화면을 갈아엎지 않는다 (끝나면 drag-guard 가 한 번 다시 그리게 한다). 다른 화면으로 이동은 막지 않는다.
+    if (!navigated && isDragging()) {
+      noteSkippedRefresh();
+      return;
+    }
     const hash = location.hash || '#/today';
     const { name, params } = parseHash(hash);
     if (navigated && name !== 'upcoming') resetUpcoming(); // 예정을 떠나면 다음에는 이번 주부터 보인다
@@ -148,6 +154,7 @@ export async function boot(): Promise<App> {
     document.title = `${TITLES[name]} · 할 일`;
   }
 
+  setOnDragIdle(() => void app.refresh());
   window.addEventListener('hashchange', () => {
     rendering = rendering.then(() => render(true));
   });

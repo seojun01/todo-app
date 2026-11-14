@@ -1333,3 +1333,36 @@ button.tg-block:hover {
   background: var(--danger);
   color: var(--bg);
 }
+
+/* 주 보기: 이어 붙인 주를 좌우로 밀어서 본다 (한 화면에 7일, 좁은 화면은 열 폭 96px 이상) */
+.tg-scroll {
+  container-type: inline-size;
+  scroll-snap-type: x proximity;
+  scroll-padding-left: 56px;
+  overscroll-behavior-x: contain;
+}
+.tg-inner.tg-multi {
+  --colw: max(96px, calc((100cqw - 56px) / 7));
+  width: calc(56px + var(--days) * var(--colw));
+  min-width: 0;
+}
+.tg-inner.tg-multi .tg-row {
+  grid-template-columns: 56px repeat(var(--days), var(--colw));
+}
+.tg-multi .tg-col {
+  scroll-snap-align: start;
+}
+.tg-gutter {
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  background: var(--bg);
+}
+.tg-week-start {
+  border-left: 2px solid color-mix(in srgb, var(--text) 30%, var(--border));
+}
+.tg-month {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--accent);
+}

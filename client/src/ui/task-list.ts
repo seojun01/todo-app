@@ -7,6 +7,7 @@ import { INBOX_ID, MAX_TITLE, splitInlineTags, tagsOf } from '../../../shared/ta
 import type { ProjectLabel } from '../views.ts';
 import type { StoredTask } from '../store/tasks.ts';
 import { h } from './dom.ts';
+import { beginDrag, endDrag } from './drag-guard.ts';
 import { PRIORITY_LABELS, describeErrors, limitTitle, openTaskEditor } from './task-editor.ts';
 
 export interface RowOptions {
@@ -165,8 +166,12 @@ function renderRow(app: App, t: StoredTask, opts: RowOptions): HTMLLIElement {
       ev.dataTransfer?.setData('text/plain', t.title);
       if (ev.dataTransfer) ev.dataTransfer.effectAllowed = 'move';
       li.classList.add('dragging');
+      beginDrag();
     });
-    li.addEventListener('dragend', () => li.classList.remove('dragging'));
+    li.addEventListener('dragend', () => {
+      li.classList.remove('dragging');
+      endDrag();
+    });
   }
   return li;
 }

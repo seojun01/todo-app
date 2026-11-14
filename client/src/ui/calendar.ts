@@ -7,7 +7,7 @@ import { DAY_PREVIEW_MAX, dayTasks, projectLabels, recurringGhosts, summarizeMon
 import { h } from './dom.ts';
 import { renderEventList } from './event-list.ts';
 import { renderCompleted, renderGhostList, renderQuickAdd, renderTaskList } from './task-list.ts';
-import { gridDays, renderTimeGrid, resetTimeGridScroll } from './calendar-time.ts';
+import { gridDays, renderTimeGrid, resetTimeGridScroll, scrollWeeks } from './calendar-time.ts';
 import { renderYear } from './calendar-year.ts';
 import { openTaskEditor } from './task-editor.ts';
 
@@ -82,18 +82,30 @@ function renderModeBar(app: App, sel: string): HTMLElement {
 
 /** 일·주·년 보기의 이전/오늘/다음과 제목 */
 function renderUnitNav(app: App, unit: 'day' | 'week' | 'year', sel: string, today: string): HTMLElement {
-  const go = (date: string) => async (): Promise<void> => {
+  const go = async (date: string): Promise<void> => {
     selected = date;
     await app.refresh();
+  };
+  // 주 보기는 이어 붙인 화면을 한 주만큼 부드럽게 민다. 이어 붙인 범위를 벗어나면 날짜를 옮겨 다시 그린다.
+  const step = (dir: -1 | 1) => (): void => {
+    if (unit === 'week' && scrollWeeks(dir, today)) return;
+    void go(shifted(unit, sel, dir));
+  };
+  const goToday = (): void => {
+    if (unit === 'week') {
+      selected = today;
+      if (scrollWeeks(0, today)) return;
+    }
+    void go(today);
   };
   const [prev, next] = UNIT_LABELS[unit];
   return h(
     'div',
     { class: 'cal-nav' },
-    h('button', { type: 'button', class: 'btn btn-small', onclick: () => void go(shifted(unit, sel, -1))() }, prev),
-    h('h3', {}, unitTitle(unit, sel)),
-    h('button', { type: 'button', class: 'btn btn-small', onclick: () => void go(shifted(unit, sel, 1))() }, next),
-    h('button', { type: 'button', class: 'btn btn-small', onclick: () => void go(today)() }, '오늘'),
+    h('button', { type: 'button', class: 'btn btn-small', onclick: step(-1) }, prev),
+    h('h3', { 'data-title': 'true' }, unitTitle(unit, sel)),
+    h('button', { type: 'button', class: 'btn btn-small', onclick: step(1) }, next),
+    h('button', { type: 'button', class: 'btn btn-small', onclick: goToday }, '오늘'),
   );
 }
 
@@ -108,7 +120,8 @@ export const renderCalendar: ViewRenderer = async (app, root) => {
   root.appendChild(h('div', { class: 'view-header' }, h('h2', {}, '캘린더')));
   root.appendChild(renderModeBar(app, sel));
   if (mode === 'month') return renderMonth(app, root, today, sel);
-  root.appendChild(renderUnitNav(app, mode, sel, today));
+  const unitNav = renderUnitNav(app, mode, sel, today);
+  root.appendChild(unitNav);
   if (mode === 'year') {
     return renderYear(app, root, {
       year: parseDate(sel).y,
@@ -131,6 +144,16 @@ export const renderCalendar: ViewRenderer = async (app, root) => {
     onPickDay: (date) => {
       selected = date;
       void setMode(app, 'day');
+    },
+    // 주 보기: 좌우로 밀어 보이는 주가 바뀌면 제목을 맞추고, 선택한 날짜가 화면 밖이면 보이는 첫 날로 옮긴다
+    onVisible: (left) => {
+      const title = unitNav.querySelector('[data-title]');
+      if (title) title.textContent = unitTitle('week', left);
+      if (selected === null || selected < left || selected > addDays(left, 6)) selected = left;
+    },
+    onRecenter: (left) => {
+      if (selected === null || selected < left || selected > addDays(left, 6)) selected = left;
+      void app.refresh();
     },
   });
 };
