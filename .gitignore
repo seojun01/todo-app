@@ -22,3 +22,7 @@ specs/001-calendar-todo/
 specs/002-personal-task-manager/plan.md
 specs/002-personal-task-manager/quickstart.md
 specs/002-personal-task-manager/research.md
+
+# 에디터 임시 파일 (vim 등)
+*.swp
+*.swo
