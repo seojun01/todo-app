@@ -35,7 +35,7 @@ echo "==> 앱 빌드 (개발 의존성은 빌드에만 쓰고, 서버에는 런�
 
 echo "==> 사용자와 폴더"
 id todo >/dev/null 2>&1 || useradd --system --home-dir "$STATE_DIR" --shell /usr/sbin/nologin todo
-install -d -m 0755 "$APP_DIR" "$APP_DIR/client"
+install -d -m 0755 "$APP_DIR" "$APP_DIR/server" "$APP_DIR/shared" "$APP_DIR/client"
 install -d -o todo -g todo -m 0750 "$STATE_DIR"
 
 echo "==> 앱 파일 배포 → $APP_DIR"
