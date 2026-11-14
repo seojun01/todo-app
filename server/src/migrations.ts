@@ -146,6 +146,10 @@ const MIGRATIONS: Migration[] = [
       CREATE INDEX gcal_import_events_range_idx ON gcal_import_events(start_date, end_date);
     `);
   },
+  // v5: 소요 시간(분). 캘린더에서 시각 있는 할 일을 블록으로 그린다. 비어 있어도 되고, 옛 클라이언트가 보내지 않아도 된다
+  (db) => {
+    db.exec(`ALTER TABLE tasks ADD COLUMN duration_min INTEGER;`);
+  },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

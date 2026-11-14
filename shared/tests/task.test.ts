@@ -8,6 +8,9 @@ import {
   effectiveProjectId,
   isValidDate,
   isValidTime,
+  durationOf,
+  fromMinutes,
+  toMinutes,
   PROJECT_COLORS,
   type Task,
   type Project,
@@ -83,6 +86,24 @@ test('validateTask: 교차 규칙 — dueDate 가 없으면 dueTime·recurrence�
     fields(validateTask(task({ dueDate: null, recurrence: { unit: 'day', interval: 1 } }))).includes('recurrence'),
   );
   assert.ok(fields(validateTask(task({ dueDate: null, reminders: ['day'] }))).includes('reminders'));
+});
+
+test('validateTask: durationMin — 시각이 있어야 하고 5~1439분이며 자정을 넘을 수 없다', () => {
+  assert.deepEqual(validateTask(task({ dueTime: '13:00', durationMin: 120 })), []);
+  assert.deepEqual(validateTask(task({ dueTime: '13:00', durationMin: null })), []);
+  assert.deepEqual(validateTask(task({ durationMin: null })), [], '옛 데이터처럼 없어도 된다');
+  assert.deepEqual(validateTask(task({ dueTime: '23:00', durationMin: 60 })), [], '정확히 자정에 끝나는 건 허용');
+  assert.ok(fields(validateTask(task({ dueTime: '23:30', durationMin: 60 }))).includes('durationMin'), '자정을 넘기면 거부');
+  assert.ok(fields(validateTask(task({ dueTime: null, durationMin: 60 }))).includes('durationMin'), '시각 없이 길이만은 거부');
+  for (const bad of [0, 4, 1440, -5, 30.5, Number.NaN]) assert.ok(fields(validateTask(task({ dueTime: '09:00', durationMin: bad }))).includes('durationMin'), String(bad));
+});
+
+test('toMinutes / fromMinutes / durationOf', () => {
+  assert.equal(toMinutes('13:30'), 810);
+  assert.equal(fromMinutes(810), '13:30');
+  assert.equal(fromMinutes(1440), '24:00');
+  assert.equal(durationOf({}), null);
+  assert.equal(durationOf({ durationMin: 45 }), 45);
 });
 
 test('validateTask: reminders 는 중복 없는 집합이고 시각 유무에 따라 종류가 제한된다', () => {

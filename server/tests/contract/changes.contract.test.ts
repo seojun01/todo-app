@@ -221,6 +221,41 @@ test('태그: push 한 tags 는 pull 로 그대로 나오고, tags 없이 올린
   await srv.close();
 });
 
+test('길이: push 한 durationMin 은 pull 로 그대로 나오고, 없이 올린 옛 클라이언트의 레코드는 null 이다', async () => {
+  const srv = await startTestServer();
+  const { cookie: c } = await srv.pair();
+  const push = (rec: Record<string, any>) => srv.api('/api/changes', { cookie: c, body: { changes: [{ type: 'task', record: rec }] } });
+  const pull = async () => ((await (await srv.api('/api/changes?since=0', { cookie: c })).json()) as { changes: { record: any }[] }).changes.map((x) => x.record);
+
+  const timed = mkTask({ dueTime: '13:00', durationMin: 120 });
+  assert.equal((await push(timed)).status, 200);
+  const { durationMin: _omit, ...legacy } = mkTask({ title: '옛 앱', dueTime: '09:00' });
+  assert.equal((await push(legacy)).status, 200, 'durationMin 이 없어도 받는다');
+  const out = await pull();
+  assert.equal(out.find((r) => r.id === timed.id)!.durationMin, 120);
+  assert.equal(out.find((r) => r.id === legacy.id)!.durationMin, null);
+
+  // 옮기고 늘리기: 길이를 바꿔 다시 올리면 반영된다
+  assert.equal((await push({ ...timed, durationMin: 45, version: '001762950896789-999999-dev' })).status, 200);
+  assert.equal((await pull()).find((r) => r.id === timed.id)!.durationMin, 45);
+  await srv.close();
+});
+
+test('길이: 잘못된 길이(시각 없음·범위 밖·자정 넘김)는 400 이고 아무것도 반영하지 않는다', async () => {
+  const srv = await startTestServer();
+  const { cookie: c } = await srv.pair();
+  const cases = [{ dueTime: null, durationMin: 60 }, { dueTime: '09:00', durationMin: 2 }, { dueTime: '09:00', durationMin: 1440 }, { dueTime: '23:30', durationMin: 60 }, { dueTime: '09:00', durationMin: 'x' }];
+  for (const c2 of cases) {
+    const res = await srv.api('/api/changes', { cookie: c, body: { changes: [{ type: 'task', record: mkTask(c2) }] } });
+    assert.equal(res.status, 400, JSON.stringify(c2));
+    const body = (await res.json()) as { details: { field: string }[] };
+    assert.ok(body.details.some((d) => d.field === 'durationMin'));
+  }
+  const pulled = (await (await srv.api('/api/changes?since=0', { cookie: c })).json()) as { changes: unknown[] };
+  assert.equal(pulled.changes.length, 0);
+  await srv.close();
+});
+
 test('태그: 잘못된 태그가 하나라도 있으면 400 이고 아무것도 반영하지 않는다', async () => {
   const srv = await startTestServer();
   const { cookie: c } = await srv.pair();

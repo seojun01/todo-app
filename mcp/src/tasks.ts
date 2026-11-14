@@ -11,6 +11,7 @@ import {
   effectiveProjectId,
   normalizeTags,
   tagKey,
+  durationOf,
   tagsOf,
   validateTask,
   validateTitle,
@@ -133,6 +134,7 @@ function view(t: Task, L: Loaded) {
     id: t.id,
     title: t.title,
     due: t.dueDate ? (t.dueTime ? `${t.dueDate} ${t.dueTime}` : t.dueDate) : null,
+    ...(durationOf(t) !== null ? { duration_minutes: durationOf(t) } : {}),
     priority: t.priority,
     project: projectName(t, L.projects),
     tags: tagsOf(t),
@@ -285,6 +287,7 @@ export async function addTask(ctx: Ctx, a: Args): Promise<unknown> {
     title: title.value,
     dueDate,
     dueTime,
+    durationMin: dueTime !== null ? (optInt(a, 'duration_minutes', 5, 1439) ?? null) : null,
     projectId: projectArg !== undefined ? resolveProject(projectArg, L.projects) : INBOX_ID,
     priority: (optInt(a, 'priority', 1, 4) ?? 4) as Priority,
     recurrence,
@@ -318,6 +321,7 @@ export async function updateTask(ctx: Ctx, a: Args): Promise<unknown> {
   if (dueDate !== undefined) candidate.dueDate = dueDate;
   const dueTime = optNullableString(a, 'due_time');
   if (dueTime !== undefined) candidate.dueTime = dueTime;
+  if (has(a, 'duration_minutes')) candidate.durationMin = a.duration_minutes === null ? null : (optInt(a, 'duration_minutes', 5, 1439) ?? null);
   const priority = optInt(a, 'priority', 1, 4);
   if (priority !== undefined) candidate.priority = priority as Priority;
   const projectArg = optString(a, 'project');
@@ -328,8 +332,8 @@ export async function updateTask(ctx: Ctx, a: Args): Promise<unknown> {
   if (reminders !== undefined) candidate.reminders = reminders as ReminderKind[];
   if (has(a, 'recurrence')) candidate.recurrence = parseRecurrence(a.recurrence ?? null);
 
-  const changed = ['title', 'due_date', 'due_time', 'priority', 'project', 'tags', 'reminders', 'recurrence'].some((k) => has(a, k));
-  if (!changed) throw new ToolError('바꿀 항목이 없어요 (title, due_date, due_time, priority, project, tags, reminders, recurrence 중 하나 이상)');
+  const changed = ['title', 'due_date', 'due_time', 'duration_minutes', 'priority', 'project', 'tags', 'reminders', 'recurrence'].some((k) => has(a, k));
+  if (!changed) throw new ToolError('바꿀 항목이 없어요 (title, due_date, due_time, duration_minutes, priority, project, tags, reminders, recurrence 중 하나 이상)');
 
   if (dueDate === null) {
     // 기한을 없애면 기한에 딸린 시각·반복·알림도 함께 없앤다 (앱과 같은 규칙)
@@ -337,6 +341,8 @@ export async function updateTask(ctx: Ctx, a: Args): Promise<unknown> {
     candidate.recurrence = null;
     candidate.reminders = [];
   }
+  // 시각이 없으면 길이도 없다 (앱과 같은 규칙)
+  if (candidate.dueTime === null) candidate.durationMin = null;
   // 시각을 더하거나 없애면 알림 종류를 맞춘다 (앱의 편집 화면과 같은 규칙)
   if (reminders === undefined && dueDate !== null && (current.dueTime !== null) !== (candidate.dueTime !== null)) {
     candidate.reminders = remapReminders(current.reminders, current.dueTime !== null, candidate.dueTime !== null).reminders;

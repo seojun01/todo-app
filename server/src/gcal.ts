@@ -10,7 +10,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { addDays } from '../../shared/calendar.ts';
 import { describeRecurrence } from '../../shared/recurrence.ts';
-import { INBOX_ID, isValidDate, tagsOf, type Task } from '../../shared/task.ts';
+import { INBOX_ID, durationOf, isValidDate, tagsOf, type Task } from '../../shared/task.ts';
 import type { AuthedRoute, PublicRoute } from './api.ts';
 import { transaction, type Db } from './db.ts';
 import { HttpError, readJson, sendJson } from './http.ts';
@@ -93,7 +93,7 @@ export function eventFor(task: Task, projectName: string, timeZone: string): Gca
   let start: GcalEvent['start'];
   let end: GcalEvent['end'];
   if (task.dueTime) {
-    const e = addMinutes(task.dueDate, task.dueTime, EVENT_MINUTES);
+    const e = addMinutes(task.dueDate, task.dueTime, durationOf(task) ?? EVENT_MINUTES);
     start = { dateTime: `${task.dueDate}T${task.dueTime}:00`, timeZone };
     end = { dateTime: `${e.date}T${e.time}:00`, timeZone };
   } else {

@@ -28,6 +28,7 @@ export interface AddInput {
   title: string;
   dueDate?: CalendarDate | null;
   dueTime?: ClockTime | null;
+  durationMin?: number | null;
   projectId?: string;
   priority?: Priority;
   recurrence?: Recurrence | null;
@@ -36,7 +37,7 @@ export interface AddInput {
 }
 
 export type EditChanges = Partial<
-  Pick<Task, 'title' | 'dueDate' | 'dueTime' | 'projectId' | 'priority' | 'recurrence' | 'reminders' | 'tags'>
+  Pick<Task, 'title' | 'dueDate' | 'dueTime' | 'durationMin' | 'projectId' | 'priority' | 'recurrence' | 'reminders' | 'tags'>
 >;
 
 /** 태그를 일괄로 바꾸기 전의 한 할 일의 태그 (되돌리기용) */
@@ -98,6 +99,7 @@ export function createTaskOps(ctx: Ctx): TaskOps {
         title: title.value,
         dueDate,
         dueTime: input.dueTime ?? null,
+        durationMin: input.dueTime ? (input.durationMin ?? null) : null,
         projectId: input.projectId ?? INBOX_ID,
         priority: input.priority ?? 4,
         recurrence: input.recurrence ?? null,
@@ -130,6 +132,8 @@ export function createTaskOps(ctx: Ctx): TaskOps {
         candidate.recurrence = null;
         candidate.reminders = [];
       }
+      // 시각이 없으면 길이도 없다 (시각 없음으로 바꾸거나 기한을 없앨 때)
+      if (candidate.dueTime === null) candidate.durationMin = null;
       // 반복을 지정하거나 규칙을 바꾸면 기한을 규칙에 맞는 첫 날짜로 맞춘다 (FR-017).
       // 기한만 직접 바꾼 경우에는 그대로 둔다 — 그 날짜가 새 기준이 된다 (FR-021).
       const ruleChanged = 'recurrence' in changes && canonicalRule(changes.recurrence) !== canonicalRule(current.recurrence);

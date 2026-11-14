@@ -31,6 +31,7 @@ export const rowToTask = (r: Row): Task => ({
   title: r.title,
   dueDate: r.due_date ?? null,
   dueTime: r.due_time ?? null,
+  durationMin: r.duration_min ?? null,
   projectId: r.project_id,
   priority: r.priority,
   recurrence: r.recurrence ? JSON.parse(r.recurrence) : null,
@@ -129,19 +130,19 @@ export function applyChanges(db: Db, body: unknown, now: Date = new Date()): { a
         }
         const armedAt = !existing || alarmKey(existing) !== alarmKey(incoming) ? nowIso : (row!.armed_at as string);
         const params = [
-          incoming.title, incoming.dueDate, incoming.dueTime, incoming.projectId, incoming.priority,
+          incoming.title, incoming.dueDate, incoming.dueTime, incoming.durationMin ?? null, incoming.projectId, incoming.priority,
           incoming.recurrence ? JSON.stringify(incoming.recurrence) : null, JSON.stringify(incoming.reminders), JSON.stringify(tagsOf(incoming)),
           incoming.done ? 1 : 0, incoming.createdAt, incoming.deleted ? 1 : 0, incoming.version, incoming.updatedBy, bump(), armedAt,
         ] as const;
         if (existing) {
           db.prepare(
-            `UPDATE tasks SET title=?, due_date=?, due_time=?, project_id=?, priority=?, recurrence=?, reminders=?, tags=?, done=?,
+            `UPDATE tasks SET title=?, due_date=?, due_time=?, duration_min=?, project_id=?, priority=?, recurrence=?, reminders=?, tags=?, done=?,
              created_at=?, deleted=?, version=?, updated_by=?, seq=?, armed_at=? WHERE id=?`,
           ).run(...params, incoming.id);
         } else {
           db.prepare(
-            `INSERT INTO tasks (title, due_date, due_time, project_id, priority, recurrence, reminders, tags, done,
-             created_at, deleted, version, updated_by, seq, armed_at, id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+            `INSERT INTO tasks (title, due_date, due_time, duration_min, project_id, priority, recurrence, reminders, tags, done,
+             created_at, deleted, version, updated_by, seq, armed_at, id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           ).run(...params, incoming.id);
         }
         applied++;

@@ -30,6 +30,8 @@ export interface Task {
   title: string;
   dueDate: CalendarDate | null;
   dueTime: ClockTime | null;
+  /** 시각이 있는 할 일의 길이(분). 캘린더에서 시작 시각부터 이 길이만큼의 블록으로 그린다. 옛 데이터에는 없다 — 읽을 때는 durationOf() 를 쓴다 */
+  durationMin?: number | null;
   projectId: string; // 'inbox' 또는 프로젝트 UUID
   priority: Priority;
   recurrence: Recurrence | null;
@@ -73,6 +75,11 @@ const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
 
 export const MAX_TITLE = 200;
+/** 소요 시간(분)의 범위. 시작 시각부터 자정을 넘기지 않는다. */
+export const MIN_DURATION = 5;
+export const MAX_DURATION = 1439;
+/** 길이를 정하지 않은 시각 있는 할 일을 캘린더에서 그릴 때의 길이(분) */
+export const DEFAULT_DURATION = 60;
 export const MAX_PROJECT_NAME = 50;
 /** 태그 하나의 길이(코드 포인트)와 할 일 하나에 붙일 수 있는 개수 */
 export const MAX_TAG = 30;
@@ -84,6 +91,15 @@ export const tagKey = (tag: string): string => tag.toLowerCase();
 /** 태그 하나의 형식: 공백·쉼표·# 없이 1~30자 */
 export const isValidTag = (tag: unknown): tag is string =>
   typeof tag === 'string' && /^[^\s,#]+$/u.test(tag) && [...tag].length <= MAX_TAG;
+
+/** 옛 데이터에는 durationMin 이 없다 */
+export const durationOf = (t: Pick<Task, 'durationMin'>): number | null => t.durationMin ?? null;
+
+/** "HH:MM" → 자정부터의 분 */
+export const toMinutes = (time: ClockTime): number => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
+
+/** 자정부터의 분 → "HH:MM" (24:00 은 "24:00" 으로 돌려준다 — 표시용) */
+export const fromMinutes = (min: number): string => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
 
 /** 옛 데이터에는 tags 가 없다 */
 export const tagsOf = (t: Pick<Task, 'tags'>): string[] => t.tags ?? [];
@@ -210,6 +226,12 @@ export function validateTask(t: Task): FieldError[] {
   if (t.dueDate !== null && !isValidDate(t.dueDate)) add('dueDate', 'format');
   if (t.dueTime !== null && !isValidTime(t.dueTime)) add('dueTime', 'format');
   if (t.dueDate === null && t.dueTime !== null) add('dueTime', 'requires-dueDate');
+
+  if (t.durationMin !== undefined && t.durationMin !== null) {
+    if (!Number.isInteger(t.durationMin) || t.durationMin < MIN_DURATION || t.durationMin > MAX_DURATION) add('durationMin', 'range');
+    else if (t.dueTime === null) add('durationMin', 'requires-dueTime');
+    else if (isValidTime(t.dueTime) && toMinutes(t.dueTime) + t.durationMin > 1440) add('durationMin', 'crosses-midnight');
+  }
 
   if (!(t.priority === 1 || t.priority === 2 || t.priority === 3 || t.priority === 4)) add('priority', 'range');
 

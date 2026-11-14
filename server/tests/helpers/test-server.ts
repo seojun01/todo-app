@@ -61,6 +61,7 @@ export function mkTask(over: Record<string, unknown> = {}) {
     title: `할 일 ${counter}`,
     dueDate: '2026-11-20',
     dueTime: null,
+    durationMin: null,
     projectId: 'inbox',
     priority: 4,
     recurrence: null,

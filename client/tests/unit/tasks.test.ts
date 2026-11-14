@@ -242,3 +242,21 @@ test('태그: 옛 데이터(tags 필드 없음)도 수정·완료가 된다', as
   ok(await ops.toggleDone(t.id));
   assert.equal(ok(await ops.editTask(t.id, { title: '고침' })).task.title, '고침');
 });
+
+test('길이: 시각이 있을 때만 저장되고, 시각이나 기한을 없애면 함께 지워진다', async () => {
+  const { ops } = await setup();
+  const noTime = ok(await ops.addTask({ title: '시각 없음', dueDate: '2026-11-20', durationMin: 60 }));
+  assert.equal(noTime.task.durationMin, null, '시각 없이 준 길이는 저장하지 않는다');
+  const t = ok(await ops.addTask({ title: '수업', dueDate: '2026-11-20', dueTime: '13:00', durationMin: 120 })).task;
+  assert.equal(t.durationMin, 120);
+  const moved = ok(await ops.editTask(t.id, { dueDate: '2026-11-21', dueTime: '09:30' })).task;
+  assert.equal(moved.durationMin, 120, '날짜·시각만 옮기면 길이는 그대로');
+  const resized = ok(await ops.editTask(t.id, { durationMin: 45 })).task;
+  assert.equal(resized.durationMin, 45);
+  const noTime2 = ok(await ops.editTask(t.id, { dueTime: null })).task;
+  assert.equal(noTime2.durationMin, null, '시각을 없애면 길이도 없다');
+  const t2 = ok(await ops.addTask({ title: '회의', dueDate: '2026-11-20', dueTime: '10:00', durationMin: 30 })).task;
+  assert.equal(ok(await ops.editTask(t2.id, { dueDate: null })).task.durationMin, null, '기한을 없애면 길이도 없다');
+  const over = await ops.addTask({ title: '자정 넘김', dueDate: '2026-11-20', dueTime: '23:30', durationMin: 60 });
+  assert.equal(over.ok, false);
+});
