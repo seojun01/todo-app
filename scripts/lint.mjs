@@ -3,7 +3,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, extname } from 'node:path';
 
-const ROOTS = ['shared', 'server/src', 'client/src'];
+const ROOTS = ['shared', 'server/src', 'client/src', 'mcp/src'];
 const BANNED = [/\binnerHTML\b/, /\bouterHTML\b/, /\binsertAdjacentHTML\b/, /\bdocument\.write\b/, /\beval\s*\(/];
 
 const problems = [];

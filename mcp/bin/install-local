@@ -1,0 +1,15 @@
+#!/bin/sh
+# 실행에 필요한 파일만 보호되지 않은 폴더(기본 ~/.local/share/todo-mcp)로 복사한다.
+# 이유: Claude 데스크톱 앱이 띄우는 프로세스는 macOS 가 막는 ~/Documents 안의 파일을 실행하지 못할 수 있다
+#       (로그에 "Operation not permitted"). 코드를 고치면 이 스크립트를 다시 실행해서 복사본을 갱신한다.
+set -eu
+SRC=$(cd "$(dirname "$0")/../.." && pwd)
+DEST="${1:-$HOME/.local/share/todo-mcp}"
+mkdir -p "$DEST/mcp" "$DEST/shared"
+rsync -a --delete --exclude tests "$SRC/shared/" "$DEST/shared/"
+rsync -a --delete "$SRC/mcp/src/" "$DEST/mcp/src/"
+rsync -a --delete "$SRC/mcp/bin/" "$DEST/mcp/bin/"
+# .ts 파일을 ES 모듈로 읽으려면 가까운 package.json 에 "type": "module" 이 있어야 한다
+printf '{ "private": true, "type": "module" }\n' > "$DEST/package.json"
+echo "복사함: $DEST"
+echo "실행 파일: $DEST/mcp/bin/todo-mcp"

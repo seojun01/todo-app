@@ -1,0 +1,5 @@
+#!/bin/sh
+# 할 일 앱 MCP 서버 실행기. 맥 키체인에서 신뢰한 Caddy 인증서를 Node 가 쓰도록 --use-system-ca 를 붙인다.
+# Claude Desktop 처럼 nvm 의 PATH 를 모르는 곳에서는 NODE=/절대/경로/node 로 Node 위치를 알려 준다.
+DIR=$(cd "$(dirname "$0")/.." && pwd)
+exec "${NODE:-node}" --use-system-ca "$DIR/src/main.ts" "$@"

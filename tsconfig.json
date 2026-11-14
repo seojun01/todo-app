@@ -14,6 +14,6 @@
     "noFallthroughCasesInSwitch": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["shared", "server", "client", "e2e", "scripts", "playwright.config.ts"],
+  "include": ["shared", "server", "client", "mcp", "e2e", "scripts", "playwright.config.ts"],
   "exclude": ["node_modules", "client/dist"]
 }

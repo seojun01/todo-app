@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "node scripts/build.mjs && TODO_DEV=1 node server/src/main.ts",
     "build": "node scripts/build.mjs",
-    "test": "node --test \"shared/tests/**/*.test.ts\" \"server/tests/**/*.test.ts\" \"client/tests/**/*.test.ts\"",
+    "test": "node --test \"shared/tests/**/*.test.ts\" \"server/tests/**/*.test.ts\" \"client/tests/**/*.test.ts\" \"mcp/tests/**/*.test.ts\"",
     "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit",
     "lint": "npm run typecheck && node scripts/lint.mjs"
