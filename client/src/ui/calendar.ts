@@ -1,5 +1,5 @@
 // 월간 캘린더: 날짜별 남은 개수·"모두 완료" 표시, 날짜 선택, 키보드 이동 (FR-005, FR-037)
-import type { ViewRenderer } from '../app.ts';
+import type { App, ViewRenderer } from '../app.ts';
 import { addDays, addMonths, monthGrid, parseDate, startOfWeek } from '../../../shared/calendar.ts';
 import { formatLong } from '../format.ts';
 import { eventShortTime, eventsByDate, loadEvents, safeColor } from '../gcal-events.ts';
@@ -7,6 +7,9 @@ import { DAY_PREVIEW_MAX, dayTasks, projectLabels, recurringGhosts, summarizeMon
 import { h } from './dom.ts';
 import { renderEventList } from './event-list.ts';
 import { renderCompleted, renderGhostList, renderQuickAdd, renderTaskList } from './task-list.ts';
+import { gridDays, renderTimeGrid, resetTimeGridScroll } from './calendar-time.ts';
+import { renderYear } from './calendar-year.ts';
+import { openTaskEditor } from './task-editor.ts';
 
 const DAY_SHORT = ['일', '월', '화', '수', '목', '금', '토'];
 const DAY_LONG = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
@@ -15,14 +18,129 @@ const DAY_LONG = ['일요일', '월요일', '화요일', '수요일', '목요일
 let selected: string | null = null;
 let lastToday: string | null = null;
 
+/** 보기 방식. 마지막으로 고른 것을 이 기기에 기억한다 (처음에는 월) */
+type Mode = 'day' | 'week' | 'month' | 'year';
+const MODES: { mode: Mode; label: string }[] = [
+  { mode: 'day', label: '일' },
+  { mode: 'week', label: '주' },
+  { mode: 'month', label: '월' },
+  { mode: 'year', label: '년' },
+];
+const MODE_KEY = 'todo.cal-mode';
+let mode: Mode = readMode();
+
+function readMode(): Mode {
+  try {
+    const v = globalThis.localStorage?.getItem(MODE_KEY);
+    return v === 'day' || v === 'week' || v === 'month' || v === 'year' ? v : 'month';
+  } catch {
+    return 'month'; // 저장소를 쓸 수 없으면 기억만 건너뛴다
+  }
+}
+
+async function setMode(app: App, next: Mode): Promise<void> {
+  mode = next;
+  try {
+    globalThis.localStorage?.setItem(MODE_KEY, next);
+  } catch {
+    /* 기억만 건너뛴다 */
+  }
+  await app.refresh();
+}
+
+/** 이전·다음으로 한 칸 움직인 날짜 (일: 하루, 주: 7일, 년: 12개월) */
+const shifted = (unit: Mode, date: string, dir: -1 | 1): string => (unit === 'day' ? addDays(date, dir) : unit === 'week' ? addDays(date, 7 * dir) : addMonths(date, 12 * dir));
+
+const UNIT_LABELS: Record<'day' | 'week' | 'year', [string, string]> = { day: ['이전 날', '다음 날'], week: ['이전 주', '다음 주'], year: ['이전 해', '다음 해'] };
+
+/** 일·주·년 보기의 제목: 일 "11월 14일 토요일", 주 "2026년 11월" (두 달에 걸치면 "2026년 11월 ~ 12월"), 년 "2026년" */
+function unitTitle(unit: 'day' | 'week' | 'year', sel: string): string {
+  if (unit === 'day') return formatLong(sel);
+  if (unit === 'year') return `${parseDate(sel).y}년`;
+  const days = gridDays('week', sel);
+  const a = parseDate(days[0]!);
+  const b = parseDate(days[6]!);
+  if (a.y !== b.y) return `${a.y}년 ${a.m}월 ~ ${b.y}년 ${b.m}월`;
+  return a.m === b.m ? `${a.y}년 ${a.m}월` : `${a.y}년 ${a.m}월 ~ ${b.m}월`;
+}
+
+/** 일·주·월·년 전환과 "일정 추가" */
+function renderModeBar(app: App, sel: string): HTMLElement {
+  return h(
+    'div',
+    { class: 'cal-modebar' },
+    h(
+      'div',
+      { class: 'cal-modes', role: 'group', 'aria-label': '보기 방식' },
+      ...MODES.map(({ mode: m, label }) =>
+        h('button', { type: 'button', class: 'btn btn-small', 'aria-pressed': String(mode === m), 'data-key': `cal-mode:${m}`, onclick: () => void setMode(app, m) }, label),
+      ),
+    ),
+    h('button', { type: 'button', class: 'btn btn-small btn-primary', 'data-key': 'cal-add', onclick: (ev: Event) => void openTaskEditor(app, { defaults: { dueDate: sel }, opener: ev.currentTarget as HTMLElement }) }, '+ 일정 추가'),
+  );
+}
+
+/** 일·주·년 보기의 이전/오늘/다음과 제목 */
+function renderUnitNav(app: App, unit: 'day' | 'week' | 'year', sel: string, today: string): HTMLElement {
+  const go = (date: string) => async (): Promise<void> => {
+    selected = date;
+    await app.refresh();
+  };
+  const [prev, next] = UNIT_LABELS[unit];
+  return h(
+    'div',
+    { class: 'cal-nav' },
+    h('button', { type: 'button', class: 'btn btn-small', onclick: () => void go(shifted(unit, sel, -1))() }, prev),
+    h('h3', {}, unitTitle(unit, sel)),
+    h('button', { type: 'button', class: 'btn btn-small', onclick: () => void go(shifted(unit, sel, 1))() }, next),
+    h('button', { type: 'button', class: 'btn btn-small', onclick: () => void go(today)() }, '오늘'),
+  );
+}
+
 export const renderCalendar: ViewRenderer = async (app, root) => {
   const today = app.today();
-  // 처음 열면(또는 날짜가 바뀌면) 오늘이 선택된 이번 달을 보여 준다
+  // 처음 열면(또는 날짜가 바뀌면) 오늘이 선택된 상태로 보여 준다
   if (selected === null || lastToday !== today) {
     selected = today;
     lastToday = today;
   }
   const sel = selected;
+  root.appendChild(h('div', { class: 'view-header' }, h('h2', {}, '캘린더')));
+  root.appendChild(renderModeBar(app, sel));
+  if (mode === 'month') return renderMonth(app, root, today, sel);
+  root.appendChild(renderUnitNav(app, mode, sel, today));
+  if (mode === 'year') {
+    return renderYear(app, root, {
+      year: parseDate(sel).y,
+      sel,
+      today,
+      onPickDay: (date) => {
+        selected = date;
+        void setMode(app, 'day');
+      },
+      onPickMonth: (date) => {
+        selected = date;
+        void setMode(app, 'month');
+      },
+    });
+  }
+  return renderTimeGrid(app, root, {
+    mode,
+    sel,
+    today,
+    onPickDay: (date) => {
+      selected = date;
+      void setMode(app, 'day');
+    },
+  });
+};
+
+/** 다른 화면으로 이동했다가 돌아오면 시간 격자는 처음 위치부터 다시 보인다 */
+export function resetCalendar(): void {
+  resetTimeGridScroll();
+}
+
+async function renderMonth(app: App, root: HTMLElement, today: string, sel: string): Promise<void> {
   const { y, m } = parseDate(sel);
   const summary = await summarizeMonth(app.ctx.db, y, m, today);
   const gridDates = monthGrid(y, m);
@@ -34,8 +152,6 @@ export const renderCalendar: ViewRenderer = async (app, root) => {
     await app.refresh();
     if (focus) document.querySelector<HTMLElement>(`[data-key="cal:${date}"]`)?.focus();
   }
-
-  root.appendChild(h('div', { class: 'view-header' }, h('h2', {}, '캘린더')));
 
   root.appendChild(
     h(
@@ -163,4 +279,4 @@ export const renderCalendar: ViewRenderer = async (app, root) => {
   const done = renderCompleted(app, completed, rowOpts);
   if (done) section.appendChild(done);
   root.appendChild(section);
-};
+}

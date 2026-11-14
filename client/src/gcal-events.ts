@@ -137,7 +137,7 @@ export async function loadEvents(app: App, from: string, to: string): Promise<Ca
 const isMultiDay = (e: CalendarEvent) => e.startDate !== e.endDate;
 
 /** 그날 하루 종일 걸리는 일정인가 (종일 일정, 또는 여러 날 일정의 가운데 날) */
-function wholeDay(e: CalendarEvent, date: string): boolean {
+export function wholeDay(e: CalendarEvent, date: string): boolean {
   if (e.allDay) return true;
   if (!isMultiDay(e)) return false;
   return date !== e.startDate && !(date === e.endDate && e.endTime);
@@ -154,6 +154,18 @@ export function eventTimeLabel(e: CalendarEvent, date: string): string {
 export function eventShortTime(e: CalendarEvent, date: string): string {
   if (wholeDay(e, date)) return '';
   return date === e.startDate ? (e.startTime ?? '') : '';
+}
+
+/** 시간 격자에 그릴 때 그날 차지하는 구간(자정부터의 분). 하루 종일이면 null. 끝 시각이 없으면 1시간으로 본다. */
+export function eventMinutesOn(e: CalendarEvent, date: string): { start: number; end: number } | null {
+  if (wholeDay(e, date) || !e.startTime) return null;
+  const min = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+  const start = date === e.startDate ? min(e.startTime) : 0;
+  let end: number;
+  if (isMultiDay(e)) end = date === e.endDate && e.endTime ? min(e.endTime) : 1440;
+  else end = e.endTime ? min(e.endTime) : start + 60;
+  end = Math.min(1440, Math.max(end, start + 1));
+  return { start, end };
 }
 
 /** 날짜별로 묶는다 (여러 날 일정은 걸친 날마다). from~to 밖의 날짜는 만들지 않는다. 같은 날에는 종일이 먼저, 그다음 시각순 */

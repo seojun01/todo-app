@@ -951,3 +951,293 @@ li.event {
   color: var(--warn);
   font-size: 0.8rem;
 }
+
+/* 캘린더: 일·주·월·년 전환 */
+.cal-modebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.cal-modes {
+  display: inline-flex;
+}
+.cal-modes .btn {
+  border-radius: 0;
+  margin-left: -1px;
+  min-width: 44px;
+}
+.cal-modes .btn:first-child {
+  border-radius: 8px 0 0 8px;
+  margin-left: 0;
+}
+.cal-modes .btn:last-child {
+  border-radius: 0 8px 8px 0;
+}
+.cal-modes .btn[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+  position: relative;
+}
+.main:has(.tg-scroll),
+.main:has(.year) {
+  max-width: none;
+}
+
+/* 일·주 보기: 시간 축 격자 */
+.tg-scroll {
+  --event-red: #ea4335;
+  overflow: auto;
+  height: min(74vh, 900px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+.tg-inner {
+  min-width: calc(56px + var(--days) * 96px);
+}
+.tg-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: var(--bg);
+}
+.tg-row {
+  display: grid;
+  grid-template-columns: 56px repeat(var(--days), minmax(0, 1fr));
+}
+.tg-col-head {
+  padding: 6px 2px;
+  text-align: center;
+  border-left: 1px solid var(--border);
+}
+.tg-headbtn {
+  width: 100%;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  border-radius: 8px;
+}
+.tg-headlabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.tg-dow {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.tg-date {
+  font-weight: 600;
+  min-width: 1.8em;
+  line-height: 1.8em;
+  border-radius: 50%;
+}
+.tg-date.is-today {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+.tg-allday {
+  border-top: 1px solid var(--border);
+  border-bottom: 2px solid var(--border);
+}
+.tg-gutter-label {
+  display: block;
+  padding: 4px 6px 0 0;
+  font-size: 0.7rem;
+  color: var(--muted);
+  text-align: right;
+}
+.tg-allday-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 28px;
+  min-width: 0;
+  padding: 2px;
+  border-left: 1px solid var(--border);
+}
+.tg-chip {
+  display: block;
+  width: 100%;
+  padding: 1px 6px;
+  border: 0;
+  border-left: 3px solid var(--c, var(--muted));
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--c, var(--muted)) 18%, var(--bg));
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.tg-chip.done {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.tg-chip.ghost,
+.tg-block.ghost {
+  border-style: dashed;
+  border-width: 1px 1px 1px 3px;
+  border-color: var(--c, var(--muted));
+  background: transparent;
+}
+.tg-chip.tg-event {
+  cursor: default;
+  border-left-color: var(--ev, var(--muted));
+  background: color-mix(in srgb, var(--ev, var(--muted)) 18%, var(--bg));
+}
+.tg-hours {
+  position: relative;
+}
+.tg-hour {
+  position: relative;
+  height: var(--hh);
+}
+.tg-hour span {
+  position: absolute;
+  top: 0;
+  right: 6px;
+  transform: translateY(-50%);
+  font-size: 0.7rem;
+  color: var(--muted);
+  white-space: nowrap;
+  background: var(--bg);
+  padding-left: 2px;
+}
+.tg-col {
+  position: relative;
+  height: calc(24 * var(--hh));
+  min-width: 0;
+  border-left: 1px solid var(--border);
+  background-image: repeating-linear-gradient(to bottom, transparent 0, transparent calc(var(--hh) - 1px), var(--border) calc(var(--hh) - 1px), var(--border) var(--hh));
+}
+.tg-block {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 2px 6px;
+  overflow: hidden;
+  border: 0;
+  border-left: 3px solid var(--c, var(--muted));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--c, var(--muted)) 18%, var(--bg));
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+  line-height: 1.25;
+  text-align: left;
+  cursor: pointer;
+}
+button.tg-block:hover {
+  background: color-mix(in srgb, var(--c, var(--muted)) 28%, var(--bg));
+}
+.tg-block .tg-title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.tg-block .tg-time {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.tg-block.done .tg-title {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.tg-block.tg-event {
+  cursor: default;
+  border-left-color: var(--ev, var(--muted));
+  background: color-mix(in srgb, var(--ev, var(--muted)) 18%, var(--bg));
+}
+.tg-now {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 2px solid #ea4335;
+  z-index: 3;
+  pointer-events: none;
+}
+.tg-now::before {
+  content: '';
+  position: absolute;
+  left: -5px;
+  top: -6px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ea4335;
+}
+
+/* 년 보기 */
+.year {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px 24px;
+}
+.year-month h3 {
+  margin: 0 0 4px;
+  font-size: 1rem;
+}
+.year-month-btn {
+  padding: 2px 4px;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.year-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 1px;
+  text-align: center;
+}
+.year-dow {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+.year-day {
+  position: relative;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.year-day:hover {
+  background: var(--surface-2);
+}
+.year-day[aria-current='date'] {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+.year-day[aria-pressed='true'] {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.year-dot {
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.year-day[aria-current='date'] .year-dot {
+  background: var(--accent-text);
+}

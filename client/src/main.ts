@@ -14,7 +14,7 @@ import { renderNav } from './ui/nav.ts';
 import { openProjectEditor } from './ui/projects.ts';
 import { createToasts } from './ui/undo-toast.ts';
 import { today } from '../../shared/calendar.ts';
-import { renderCalendar } from './ui/calendar.ts';
+import { renderCalendar, resetCalendar } from './ui/calendar.ts';
 import { renderPair } from './ui/pair.ts';
 import { renderProject } from './ui/project-view.ts';
 import { renderSettings } from './ui/settings.ts';
@@ -120,6 +120,7 @@ export async function boot(): Promise<App> {
     const hash = location.hash || '#/today';
     const { name, params } = parseHash(hash);
     if (navigated && name !== 'upcoming') resetUpcoming(); // 예정을 떠나면 다음에는 이번 주부터 보인다
+    if (navigated && name !== 'calendar') resetCalendar(); // 캘린더를 떠나면 시간 격자는 다음에 처음 위치부터 보인다
     const view = routes[name];
     const next = h('div', {});
     if (view) await view(app, next, params);
