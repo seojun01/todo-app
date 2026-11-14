@@ -1,12 +1,12 @@
 // 예정 화면: 일요일~토요일 한 주씩 날짜별 카드 열로 보여 주고, 이전 주/다음 주로 넘기며, 날짜 머리글에서 바로 추가한다
-import type { ViewRenderer } from '../app.ts';
+import type { App, ViewRenderer } from '../app.ts';
 import { formatLong } from '../format.ts';
 import { parseDate } from '../../../shared/calendar.ts';
 import { eventsByDate, loadEvents } from '../gcal-events.ts';
 import { projectLabels, upcomingView } from '../views.ts';
 import { h } from './dom.ts';
 import { renderEventList } from './event-list.ts';
-import { renderGhostList, renderQuickAdd, renderTaskList } from './task-list.ts';
+import { TASK_DRAG_TYPE, renderGhostList, renderQuickAdd, renderTaskList } from './task-list.ts';
 
 /** 추가 입력이 열려 있는 날짜 */
 let adding: string | null = null;
@@ -22,7 +22,7 @@ export function resetUpcoming(): void {
 export const renderUpcoming: ViewRenderer = async (app, root) => {
   const today = app.today();
   const days = await upcomingView(app.ctx.db, today, page);
-  const rowOpts = { today, projects: await projectLabels(app.ctx.db) };
+  const rowOpts = { today, projects: await projectLabels(app.ctx.db), draggable: true };
   // 구글 캘린더에서 불러온 일정 (불러오기를 켜지 않았거나 실패하면 비어 있다)
   const events = eventsByDate(await loadEvents(app, days[0]!.date, days[days.length - 1]!.date), days[0]!.date, days[days.length - 1]!.date);
 
@@ -49,6 +49,8 @@ export const renderUpcoming: ViewRenderer = async (app, root) => {
     ),
   );
 
+  // 지금 화면에 보이는 할 일의 현재 기한 (옮긴 뒤 실행 취소에 쓴다)
+  const dueOf = new Map(days.flatMap((d) => d.tasks.map((t) => [t.id, t.dueDate] as const)));
   const board = h('div', { class: 'board' });
   root.appendChild(board);
 
@@ -86,6 +88,45 @@ export const renderUpcoming: ViewRenderer = async (app, root) => {
     if (day.ghosts.length > 0) section.appendChild(renderGhostList(app, day.ghosts, rowOpts));
     if (day.tasks.length === 0 && day.ghosts.length === 0 && dayEvents.length === 0) section.appendChild(h('p', { class: 'hint' }, '할 일 없음'));
     section.appendChild(addBtn);
+    enableDrop(app, section, day.date, dueOf);
     board.appendChild(section);
   }
 };
+
+/** 날짜 칸을 카드를 떨어뜨릴 수 있는 자리로 만든다. 떨어뜨리면 그 할 일의 기한이 이 날짜로 바뀐다 (시각·반복 등은 그대로). */
+function enableDrop(app: App, section: HTMLElement, date: string, dueOf: Map<string, string | null>): void {
+  const isTaskDrag = (ev: DragEvent): boolean => ev.dataTransfer?.types.includes(TASK_DRAG_TYPE) ?? false;
+  section.addEventListener('dragover', (ev) => {
+    if (!isTaskDrag(ev)) return;
+    ev.preventDefault(); // 떨어뜨리기를 허용한다
+    if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'move';
+    section.classList.add('drop-target');
+  });
+  section.addEventListener('dragleave', (ev) => {
+    if (!section.contains(ev.relatedTarget as Node | null)) section.classList.remove('drop-target');
+  });
+  section.addEventListener('drop', async (ev) => {
+    section.classList.remove('drop-target');
+    const id = ev.dataTransfer?.getData(TASK_DRAG_TYPE);
+    if (!id) return;
+    ev.preventDefault();
+    try {
+      if (!dueOf.has(id)) return;
+      const prev = dueOf.get(id) ?? null;
+      if (prev === date) return;
+      const r = await app.tasks.editTask(id, { dueDate: date });
+      if (!r.ok) return;
+      await app.refresh();
+      app.toasts.show(`${formatLong(date)}로 옮겼어요`, {
+        actionLabel: '실행 취소',
+        onAction: async () => {
+          await app.tasks.editTask(id, { dueDate: prev });
+          await app.refresh();
+        },
+      });
+    } catch (err) {
+      console.error(err);
+      app.toasts.show('옮기지 못했어요. 다시 시도해 주세요.', { duration: 8000 });
+    }
+  });
+}

@@ -735,6 +735,19 @@ dialog.sheet h2 {
   margin: -2px 0 -4px;
 }
 
+/* 카드 끌어서 날짜 옮기기 */
+.board li.task[draggable='true'] {
+  cursor: grab;
+}
+.board li.task.dragging {
+  opacity: 0.45;
+}
+.board .section.day.drop-target {
+  outline: 2px dashed var(--accent);
+  outline-offset: 4px;
+  border-radius: var(--radius);
+}
+
 /* 태그 */
 .chip.tag {
   color: var(--accent);

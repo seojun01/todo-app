@@ -151,3 +151,14 @@ test('다른 화면에 갔다 오면 이번 주부터 다시 보이고, 같은 �
   await expect(page.getByRole('button', { name: '이전 주' })).toBeDisabled();
   await expect(page.getByRole('textbox', { name: '할 일 추가' })).toHaveCount(0);
 });
+
+test('카드를 끌어 다른 날짜 칸에 놓으면 기한이 그 날짜로 옮겨지고, 실행 취소로 되돌린다', async ({ page }) => {
+  await openApp(page);
+  await seed(page);
+  await navTo(page, '예정');
+  await day(page, DAYS[1]!).locator('li.task', { hasText: '내일 일' }).dragTo(day(page, DAYS[2]!));
+  await expect(day(page, DAYS[2]!).getByText('내일 일')).toBeVisible();
+  await expect(day(page, DAYS[1]!).getByText('내일 일')).toHaveCount(0);
+  await page.getByRole('button', { name: '실행 취소' }).click();
+  await expect(day(page, DAYS[1]!).getByText('내일 일')).toBeVisible();
+});

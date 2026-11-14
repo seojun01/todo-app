@@ -18,7 +18,12 @@ export interface RowOptions {
   projects?: Map<string, ProjectLabel>;
   /** 지금 시각 — 오늘 기한인 할 일의 시각이 지났는지 강조하는 데 쓴다 (renderRow 가 채운다) */
   now?: Date;
+  /** 카드를 끌어 다른 날짜 칸으로 옮길 수 있게 한다 (예정 화면) */
+  draggable?: boolean;
 }
+
+/** 끌고 있는 카드의 id 를 dataTransfer 에 싣는 형식 */
+export const TASK_DRAG_TYPE = 'application/x-todo-task-id';
 
 /** 완료됨 영역의 펼침 상태는 다시 그려도 유지한다 */
 let completedOpen = false;
@@ -147,13 +152,23 @@ function renderRow(app: App, t: StoredTask, opts: RowOptions): HTMLLIElement {
     '삭제',
   );
 
-  return h(
+  const li = h(
     'li',
-    { class: `task${t.done ? ' done' : ''}`, 'data-key': `task:${t.id}` },
+    { class: `task${t.done ? ' done' : ''}`, 'data-key': `task:${t.id}`, draggable: opts.draggable && !t.done ? 'true' : null },
     check,
     h('div', { class: 'task-main' }, h('p', { class: 'task-title', id: titleId }, t.title), meta.length ? h('div', { class: 'task-meta' }, ...meta) : null),
     h('div', { class: 'task-actions' }, edit, del),
   );
+  if (opts.draggable && !t.done) {
+    li.addEventListener('dragstart', (ev) => {
+      ev.dataTransfer?.setData(TASK_DRAG_TYPE, t.id);
+      ev.dataTransfer?.setData('text/plain', t.title);
+      if (ev.dataTransfer) ev.dataTransfer.effectAllowed = 'move';
+      li.classList.add('dragging');
+    });
+    li.addEventListener('dragend', () => li.classList.remove('dragging'));
+  }
+  return li;
 }
 
 /** 반복 할 일의 앞으로의 회차(가상) 한 장. 아직 오지 않은 회차라 완료·삭제는 없고, 시리즈를 고치는 버튼만 있다. */
