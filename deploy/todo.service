@@ -1,0 +1,38 @@
+# systemd 유닛: 할 일 앱 서버. 설치 위치: /etc/systemd/system/todo.service (deploy/install.sh 가 복사한다)
+[Unit]
+Description=Todo app server (sync + reminders)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=todo
+Group=todo
+WorkingDirectory=/opt/todo
+ExecStart=/usr/bin/node /opt/todo/server/src/main.ts
+Environment=HOST=127.0.0.1
+Environment=PORT=8080
+Environment=TODO_DB=/var/lib/todo/todo.db
+Environment=TODO_VAPID_FILE=/var/lib/todo/vapid.json
+# 구글 캘린더 연동 설정 (선택). 시크릿이 들어가므로 유닛 파일이 아니라 이 파일에 둔다: deploy/GOOGLE_CALENDAR.md
+# 파일이 없어도 서버는 뜬다 (연동만 꺼진다). 권한은 root:todo 0640 으로.
+EnvironmentFile=-/etc/todo/todo.env
+# node:sqlite 의 "experimental" 경고를 로그에서 줄인다
+Environment=NODE_NO_WARNINGS=1
+Restart=on-failure
+RestartSec=3
+
+# 쓸 수 있는 곳은 /var/lib/todo 뿐이다
+StateDirectory=todo
+StateDirectoryMode=0750
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+# 아웃바운드 HTTPS 는 막지 않는다: 알림 푸시를 애플 서버로 보내야 한다 (IPAddressDeny 등을 쓰지 말 것)
+
+[Install]
+WantedBy=multi-user.target
