@@ -137,6 +137,24 @@ describe('MCP 도구 (실제 서버 대상)', () => {
     for (const k of u.updated.reminders ?? []) assert.ok(['day', '1d'].includes(k), `날짜 기준 알림이어야 해요: ${k}`);
   });
 
+  it('길이: 시각과 함께 정하고 바꿀 수 있고, 시각을 없애면 함께 지워지며, 잘못된 값은 오류다', async () => {
+    const r = (await addTask(s.ctx, { title: '수업', due_date: '2026-11-20', due_time: '13:00', duration_minutes: 120 })) as Json;
+    assert.equal(r.added.duration_minutes, 120);
+    const noLen = (await addTask(s.ctx, { title: '길이 없음', due_date: '2026-11-20', due_time: '13:00' })) as Json;
+    assert.equal(noLen.added.duration_minutes, undefined);
+    const u = (await updateTask(s.ctx, { id: r.added.id, duration_minutes: 45 })) as Json;
+    assert.equal(u.updated.duration_minutes, 45);
+    const moved = (await updateTask(s.ctx, { id: r.added.id, due_time: '15:00' })) as Json;
+    assert.equal(moved.updated.duration_minutes, 45, '시각만 바꾸면 길이는 그대로');
+    const cleared = (await updateTask(s.ctx, { id: r.added.id, duration_minutes: null })) as Json;
+    assert.equal(cleared.updated.duration_minutes, undefined);
+    const again = (await addTask(s.ctx, { title: '다시', due_date: '2026-11-20', due_time: '13:00', duration_minutes: 60 })) as Json;
+    const noTime = (await updateTask(s.ctx, { id: again.added.id, due_time: null })) as Json;
+    assert.equal(noTime.updated.duration_minutes, undefined, '시각을 없애면 길이도 없다');
+    await assert.rejects(addTask(s.ctx, { title: '시각 없는 길이', due_date: '2026-11-20', duration_minutes: 60 }), (e: Error) => /durationMin: requires-dueTime/.test(e.message));
+    await assert.rejects(addTask(s.ctx, { title: '자정 넘김', due_date: '2026-11-20', due_time: '23:30', duration_minutes: 60 }), (e: Error) => /durationMin: crosses-midnight/.test(e.message));
+  });
+
   it('완료: 일반 할 일은 done, 이미 완료면 알려 준다, 다시 열 수 있다', async () => {
     const r = (await addTask(s.ctx, { title: '한 번만 할 일', due_date: TODAY })) as Json;
     const c = (await completeTask(s.ctx, { id: r.added.id })) as Json;

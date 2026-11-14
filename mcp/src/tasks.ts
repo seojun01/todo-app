@@ -287,7 +287,7 @@ export async function addTask(ctx: Ctx, a: Args): Promise<unknown> {
     title: title.value,
     dueDate,
     dueTime,
-    durationMin: dueTime !== null ? (optInt(a, 'duration_minutes', 5, 1439) ?? null) : null,
+    durationMin: optInt(a, 'duration_minutes', 5, 1439) ?? null, // 시각이 없으면 검증이 거절한다
     projectId: projectArg !== undefined ? resolveProject(projectArg, L.projects) : INBOX_ID,
     priority: (optInt(a, 'priority', 1, 4) ?? 4) as Priority,
     recurrence,
@@ -341,8 +341,8 @@ export async function updateTask(ctx: Ctx, a: Args): Promise<unknown> {
     candidate.recurrence = null;
     candidate.reminders = [];
   }
-  // 시각이 없으면 길이도 없다 (앱과 같은 규칙)
-  if (candidate.dueTime === null) candidate.durationMin = null;
+  // 시각을 없애면 길이도 함께 없앤다 (앱과 같은 규칙). 시각 없이 길이만 새로 주면 검증이 거절한다.
+  if (dueDate === null || (dueTime === null && !has(a, 'duration_minutes'))) candidate.durationMin = null;
   // 시각을 더하거나 없애면 알림 종류를 맞춘다 (앱의 편집 화면과 같은 규칙)
   if (reminders === undefined && dueDate !== null && (current.dueTime !== null) !== (candidate.dueTime !== null)) {
     candidate.reminders = remapReminders(current.reminders, current.dueTime !== null, candidate.dueTime !== null).reminders;
