@@ -441,7 +441,10 @@ export function createGcal(opts: GcalOptions): Gcal {
       db.prepare('DELETE FROM gcal_events WHERE task_id = ?').run(task.id);
       return;
     }
-    if (map?.synced_version === task.version) return;
+    // 올린 일정 내용의 지문. 내용이 같으면(순서만 바꾼 경우 등 버전만 달라졌으면) 다시 올리지 않는다.
+    // 예전 행에는 지문 대신 할 일 버전이 들어 있다: 버전이 같아도 건너뛴다.
+    const synced = `h:${createHash('sha256').update(JSON.stringify(event)).digest('base64url')}`;
+    if (map && (map.synced_version === synced || map.synced_version === task.version)) return;
 
     const create = async () =>
       ((await api(`/calendars/${encodeURIComponent(calendarId)}/events`, { method: 'POST', body: event })) as { id: string }).id;
@@ -459,7 +462,7 @@ export function createGcal(opts: GcalOptions): Gcal {
     }
     db.prepare(
       'INSERT INTO gcal_events (task_id, event_id, synced_version) VALUES (?, ?, ?) ON CONFLICT(task_id) DO UPDATE SET event_id = excluded.event_id, synced_version = excluded.synced_version',
-    ).run(task.id, eventId, task.version);
+    ).run(task.id, eventId, synced);
   }
 
   async function runSync(): Promise<void> {

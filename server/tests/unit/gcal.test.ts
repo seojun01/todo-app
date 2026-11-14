@@ -259,6 +259,25 @@ test('동기화: 수정은 같은 일정을 PUT 으로 고치고, 완료·기한
   assert.equal(google.events().find((x) => x.method === 'PUT')!.body.summary, '✓ 가 수정');
 });
 
+test('동기화: 순서(sortKey)만 바뀌어 일정 내용이 같으면 다시 올리지 않는다. 내용이 바뀌면 올린다', async () => {
+  const { gcal, google, push, connect } = setup();
+  connect();
+  const a = mkTask({ title: '순서', dueDate: '2026-11-20', dueTime: '10:00' });
+  push(a);
+  await gcal.syncNow();
+  assert.equal(google.events().filter((x) => x.method === 'POST').length, 1);
+
+  google.clear();
+  const moved = bump(a, { sortKey: 'i' });
+  push(moved);
+  await gcal.syncNow();
+  assert.deepEqual(google.events(), []);
+
+  push(bump(moved, { title: '순서 수정' }));
+  await gcal.syncNow();
+  assert.equal(google.events().find((x) => x.method === 'PUT')!.body.summary, '순서 수정');
+});
+
 test('동기화: 이미 완료된 채 처음 보는 할 일, 처음부터 삭제된 할 일은 일정을 만들지 않는다', async () => {
   const { gcal, google, push, connect } = setup();
   connect();
