@@ -13,7 +13,7 @@ export interface EditorOptions {
   /** 있으면 수정, 없으면 추가 */
   task?: StoredTask;
   /** 추가할 때의 기본값 */
-  defaults?: { dueDate?: string | null; projectId?: string };
+  defaults?: { dueDate?: string | null; dueTime?: string | null; durationMin?: number | null; projectId?: string };
   /** 닫을 때 포커스를 돌려줄 요소 */
   opener?: HTMLElement | null;
 }
@@ -135,7 +135,7 @@ export async function openTaskEditor(app: App, opts: EditorOptions = {}): Promis
   // 이 기기에서 알림이 울릴 수 있는지는 서버에 물어봐야 알 수 있다. 시트가 늦게 열리지 않도록 기다리지 않고, 알게 되면 안내를 갱신한다.
   let deviceNotice: string | null = null;
   const reminder = createReminderField({
-    initialTime: task?.dueTime ?? null,
+    initialTime: task ? task.dueTime : (opts.defaults?.dueTime ?? null),
     initialReminders: task?.reminders ?? [],
     getDate: () => dateInput.value,
     settings: await app.settings.get(),
@@ -155,7 +155,7 @@ export async function openTaskEditor(app: App, opts: EditorOptions = {}): Promis
     );
     durationSelect.value = current !== null ? String(current) : '';
   };
-  fillDurations(task ? durationOf(task) : null);
+  fillDurations(task ? durationOf(task) : (opts.defaults?.durationMin ?? null));
   const syncDuration = (): void => {
     const hasTime = reminder.readTime() !== null;
     durationSelect.disabled = !hasTime;

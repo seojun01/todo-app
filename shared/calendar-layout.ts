@@ -50,3 +50,48 @@ export function layoutSpans(spans: readonly TimeSpan[]): Map<string, Placement> 
 
 /** 시작 시각과 길이(분)로 블록의 끝을 구한다. 자정을 넘기지 않는다. */
 export const spanEnd = (startMin: number, durationMin: number): number => Math.min(1440, startMin + durationMin);
+
+// ── 격자에서 끌기·만들기 계산 (모두 자정부터의 분) ─────────────────────────
+
+/** 시간 격자에서 시각이 맞춰지는 단위(분) */
+export const SNAP_MIN = 15;
+/** 끌어서 줄일 수 있는 가장 짧은 길이(분) */
+export const MIN_BLOCK_MIN = 15;
+/** 빈 곳을 눌러 만들 때의 기본 길이(분) */
+export const CLICK_CREATE_MIN = 60;
+
+const clamp = (n: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, n));
+
+/** 가까운 단위로 맞춘다 */
+export const snapMinutes = (min: number, step: number = SNAP_MIN): number => Math.round(min / step) * step;
+
+/** 열의 위에서부터 y(px) 위치의 분 (0..1440) */
+export const minutesAtY = (y: number, hourPx: number): number => clamp((y * 60) / hourPx, 0, 1440);
+
+/** 블록 전체를 deltaMin 만큼 옮긴 새 시작 시각: 단위에 맞추고 하루 안(0 ~ 자정-길이)에 가둔다 */
+export function movedStart(start: number, durationMin: number, deltaMin: number): number {
+  return clamp(snapMinutes(start + deltaMin), 0, Math.max(0, 1440 - durationMin));
+}
+
+/** 아래쪽 끝을 deltaMin 만큼 끌어 늘이거나 줄인 새 끝: 단위에 맞추고 최소 길이 이상, 자정 이하 */
+export function resizedEnd(start: number, end: number, deltaMin: number): number {
+  return clamp(snapMinutes(end + deltaMin), start + MIN_BLOCK_MIN, 1440);
+}
+
+/** 빈 곳을 끌어 만들 때의 구간: 두 지점 사이를 단위에 맞추고, 너무 짧으면 최소 길이로 */
+export function dragRange(aMin: number, bMin: number): { start: number; end: number } {
+  let start = snapMinutes(Math.min(aMin, bMin));
+  let end = snapMinutes(Math.max(aMin, bMin));
+  if (end - start < MIN_BLOCK_MIN) end = start + MIN_BLOCK_MIN;
+  if (end > 1440) {
+    end = 1440;
+    start = Math.min(start, 1440 - MIN_BLOCK_MIN);
+  }
+  return { start, end };
+}
+
+/** 빈 곳을 한 번 눌렀을 때의 구간: 누른 지점이 속한 30분 칸에서 시작해 한 시간 (자정을 넘지 않게 앞당긴다) */
+export function clickRange(min: number): { start: number; end: number } {
+  const start = clamp(Math.floor(min / 30) * 30, 0, 1440 - CLICK_CREATE_MIN);
+  return { start, end: start + CLICK_CREATE_MIN };
+}

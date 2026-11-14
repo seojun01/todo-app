@@ -27,3 +27,9 @@ export function formatTime(time: string): string {
 export function dayName(date: string): string {
   return DAY_LONG[weekday(date)]!;
 }
+
+/** 자정부터의 분 두 개를 "오후 1:00 ~ 오후 3:00" 로 (자정에 끝나면 "자정") */
+export function formatRange(start: number, end: number): string {
+  const t = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+  return `${formatTime(t(start))} ~ ${end >= 1440 ? '자정' : formatTime(t(end))}`;
+}

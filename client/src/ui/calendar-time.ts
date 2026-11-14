@@ -5,12 +5,13 @@ import { addDays, parseDate, startOfWeek, weekday } from '../../../shared/calend
 import { layoutSpans, spanEnd, type TimeSpan } from '../../../shared/calendar-layout.ts';
 import { DEFAULT_DURATION, durationOf, toMinutes } from '../../../shared/task.ts';
 import { sortTasks } from '../../../shared/sort.ts';
-import { dayName, formatLong, formatTime } from '../format.ts';
+import { dayName, formatLong, formatRange } from '../format.ts';
 import { eventMinutesOn, eventsByDate, loadEvents, safeColor, wholeDay, type CalendarEvent } from '../gcal-events.ts';
 import { listTasksByDueRange, type StoredTask } from '../store/tasks.ts';
 import { projectLabels, recurringGhosts, type ProjectLabel } from '../views.ts';
 import { h } from './dom.ts';
 import { openTaskEditor } from './task-editor.ts';
+import { enableGridInteractions } from './calendar-drag.ts';
 
 /** 한 시간의 높이(px). 격자 줄무늬(CSS)도 이 값을 --hh 로 받아 쓴다 */
 export const HOUR_PX = 52;
@@ -35,12 +36,6 @@ export const gridDays = (mode: 'day' | 'week', sel: string): string[] =>
   mode === 'day' ? [sel] : Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(sel), i));
 
 const hourLabel = (hh: number): string => (hh === 0 ? '' : hh < 12 ? `오전 ${hh}시` : hh === 12 ? '정오' : `오후 ${hh - 12}시`);
-
-/** "오후 1:00 ~ 오후 3:00" (자정에 끝나면 "자정") */
-export function rangeLabel(start: number, end: number): string {
-  const t = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-  return `${formatTime(t(start))} ~ ${end >= 1440 ? '자정' : formatTime(t(end))}`;
-}
 
 type Item =
   | { kind: 'task' | 'ghost'; id: string; task: StoredTask; start: number; end: number }
@@ -89,6 +84,8 @@ export async function renderTimeGrid(app: App, root: HTMLElement, o: TimeGridOpt
         type: 'button',
         class: `tg-chip${t.done ? ' done' : ''}${kind === 'ghost' ? ' ghost' : ''}`,
         'data-color': label.color,
+        'data-task-id': kind === 'task' ? t.id : null,
+        draggable: kind === 'task' ? 'true' : null,
         'data-key': `${kind === 'ghost' ? 'tg-ghost' : 'tg-task'}:${t.id}`,
         onclick: (ev: Event) => openTaskEditor(app, { task: t, opener: ev.currentTarget as HTMLElement }),
       },
@@ -109,7 +106,7 @@ export async function renderTimeGrid(app: App, root: HTMLElement, o: TimeGridOpt
     // 그날의 항목을 모은다
     const dayTasks = sortTasks(tasks.filter((t) => t.dueDate === date)) as StoredTask[];
     const items: Item[] = [];
-    const alldayCell = h('div', { class: 'tg-allday-cell' });
+    const alldayCell = h('div', { class: 'tg-allday-cell', 'data-date': date });
     for (const t of dayTasks) {
       if (t.dueTime) {
         const start = toMinutes(t.dueTime);
@@ -144,9 +141,9 @@ export async function renderTimeGrid(app: App, root: HTMLElement, o: TimeGridOpt
       const top = (it.start * HOUR_PX) / 60;
       const height = Math.max(MIN_BLOCK_PX, ((it.end - it.start) * HOUR_PX) / 60 - 1);
       const geo = `top:${top}px;height:${height}px;left:calc(${p.col} * 100% / ${p.cols} + 1px);width:calc(100% / ${p.cols} - 3px)`;
-      const range = rangeLabel(it.start, it.end);
+      const range = formatRange(it.start, it.end);
       // 나란히 놓여 좁은 블록은 시작 시각만 보인다 (전체 구간은 title·스크린 리더 이름에 있다)
-      const shownTime = p.cols > 1 ? rangeLabel(it.start, it.end).split(' ~ ')[0]! : range;
+      const shownTime = p.cols > 1 ? formatRange(it.start, it.end).split(' ~ ')[0]! : range;
       if (it.kind === 'event') {
         const color = safeColor(it.event.color);
         col.appendChild(
@@ -168,8 +165,11 @@ export async function renderTimeGrid(app: App, root: HTMLElement, o: TimeGridOpt
           'button',
           {
             type: 'button',
-            class: `tg-block${t.done ? ' done' : ''}${ghost ? ' ghost' : ''}`,
+            class: `tg-block${t.done ? ' done' : ''}${ghost ? ' ghost' : ' movable'}`,
             style: geo,
+            'data-task-id': ghost ? null : t.id,
+            'data-start': String(it.start),
+            'data-end': String(it.end),
             'data-color': label.color,
             'data-priority': String(t.priority),
             'data-key': `${ghost ? 'tg-ghost' : 'tg-task'}:${t.id}:${date}`,
@@ -179,6 +179,7 @@ export async function renderTimeGrid(app: App, root: HTMLElement, o: TimeGridOpt
           h('span', { class: 'tg-title' }, ghost ? h('span', { 'aria-hidden': 'true' }, '↻ ') : null, t.done ? h('span', { 'aria-hidden': 'true' }, '✓ ') : null, t.title),
           height >= 38 ? h('span', { class: 'tg-time' }, shownTime) : null,
           h('span', { class: 'sr-only' }, ` (${range}${t.done ? ', 완료' : ''}${ghost ? ', 반복 예정' : ''}, ${label.name})`),
+          ghost ? null : h('span', { class: 'tg-resize', 'aria-hidden': 'true', title: '끌어서 길이 바꾸기' }),
         ),
       );
     }
@@ -203,12 +204,24 @@ export async function renderTimeGrid(app: App, root: HTMLElement, o: TimeGridOpt
   inner.append(h('div', { class: 'tg-sticky' }, head, allday), body);
   scroller.addEventListener('scroll', () => (savedScroll = scroller.scrollTop), { passive: true });
   root.appendChild(scroller);
+  enableGridInteractions(app, scroller, { hourPx: HOUR_PX, tasks: new Map(tasks.map((t) => [t.id, t])) });
 
   // 처음에는 지금 시각(오늘이 보일 때) 또는 아침 7시 근처가 보이게, 다시 그릴 때는 보던 자리를 유지한다
   const initial = days.includes(o.today) ? Math.max(0, nowMin / 60 - 1.5) * HOUR_PX : 7 * HOUR_PX;
-  requestAnimationFrame(() => {
+  // 화면은 다른 읽기를 마친 뒤에야 DOM 에 붙는다. 붙기 전에 scrollTop 을 정하면 무시되므로 붙을 때까지 기다린다.
+  whenAttached(scroller, () => {
     scroller.scrollTop = savedScroll ?? initial;
   });
+}
+
+/** el 이 문서에 붙으면(최대 약 2초) 다음 프레임에 fn 을 실행한다 */
+function whenAttached(el: HTMLElement, fn: () => void): void {
+  let tries = 120;
+  const tick = (): void => {
+    if (el.isConnected) fn();
+    else if (tries-- > 0) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
 }
 
 /** 다른 화면으로 갔다 오면 처음 위치부터 다시 */
