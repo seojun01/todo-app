@@ -11,7 +11,7 @@ import { listTasksByDueRange, type StoredTask } from '../store/tasks.ts';
 import { projectLabels, recurringGhosts, type ProjectLabel } from '../views.ts';
 import { h } from './dom.ts';
 import { openTaskEditor } from './task-editor.ts';
-import { enableGridInteractions } from './calendar-drag.ts';
+import { enableGridInteractions, removeTask } from './calendar-drag.ts';
 
 /** 한 시간의 높이(px). 격자 줄무늬(CSS)도 이 값을 --hh 로 받아 쓴다 */
 export const HOUR_PX = 52;
@@ -309,25 +309,6 @@ export function scrollWeeks(dir: -1 | 0 | 1, todayDate: string): boolean {
 /** 부드럽게 미는 중인 목표 위치 (연달아 누르면 누적한다) */
 let weekScrollTarget: number | null = null;
 let weekScrollTimer: ReturnType<typeof setTimeout> | undefined;
-
-/** 할 일을 지우고 "실행 취소"를 보인다 (목록의 삭제와 같다) */
-async function removeTask(app: App, t: StoredTask): Promise<void> {
-  try {
-    const r = await app.tasks.deleteTask(t.id);
-    if (!r.ok) return;
-    await app.refresh();
-    app.toasts.show('삭제했어요', {
-      actionLabel: '실행 취소',
-      onAction: async () => {
-        await app.tasks.undoDelete();
-        await app.refresh();
-      },
-    });
-  } catch (err) {
-    console.error(err);
-    app.toasts.show('삭제하지 못했어요. 저장 공간을 확인한 뒤 다시 시도해 주세요.', { duration: 8000 });
-  }
-}
 
 /** 블록·칩에 포커스를 둔 채 Delete(맥은 Backspace)를 누르면 지운다 */
 function onDeleteKey(app: App, t: StoredTask, ev: KeyboardEvent): void {

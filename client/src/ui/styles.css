@@ -1296,6 +1296,14 @@ button.tg-block:hover {
   background: color-mix(in srgb, var(--accent) 30%, var(--bg));
   pointer-events: none;
 }
+/* Option(Alt)-끌기 복사: 미리보기를 점선으로, 커서는 복사 모양 */
+.tg-block.tg-preview.copying {
+  border-style: dashed;
+}
+.tg-scroll.is-dragging.is-copying,
+.tg-scroll.is-dragging.is-copying * {
+  cursor: copy !important;
+}
 .tg-allday-cell.drop-target,
 .tg-col.drop-target {
   outline: 2px dashed var(--accent);
@@ -1303,6 +1311,50 @@ button.tg-block:hover {
 }
 .tg-chip[draggable='true'] {
   cursor: grab;
+}
+
+/* 시간 격자: 우클릭 메뉴 */
+.tg-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 168px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.18);
+  font: inherit;
+}
+.tg-menu-item {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+}
+.tg-menu-item:hover:not(:disabled),
+.tg-menu-item:focus-visible {
+  background: var(--surface);
+  outline: none;
+}
+.tg-menu-item.danger {
+  color: var(--danger);
+}
+.tg-menu-item:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+.tg-menu-key {
+  color: var(--muted);
 }
 
 /* 시간 격자: 블록 삭제 버튼 (마우스를 올리거나 포커스를 두면 나타난다) */

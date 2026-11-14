@@ -2,12 +2,16 @@
 //  - 빈 곳을 누르면 그 시각에 일정 만들기 창이 열리고, 빈 곳을 끌면 끈 구간으로 열린다
 //  - 블록을 끌면 날짜(주 보기)와 시각이 바뀌고, 아래쪽 끝을 끌면 길이가 바뀐다 (15분 단위)
 //  - 블록을 "하루 종일" 줄로 끌면 시각이 없어지고, 하루 종일 칩을 시간 열로 끌면 그 시각이 정해진다
+//  - Option(Alt)을 누른 채 끌면 옮기지 않고 놓은 자리에 복사한다 (블록·하루 종일 칩 모두)
+//  - 블록·칩을 우클릭하면 복사·삭제 메뉴, 빈 칸을 우클릭하면 붙여넣기 메뉴가 열린다
+//  - 블록·칩에 포커스를 두고 ⌘/Ctrl+C 로 복사, ⌘/Ctrl+V 로 마우스가 놓인 칸(없으면 다음 날 같은 시각)에 붙여 넣는다
 // 마우스는 조금만 움직여도 끌기가 시작되고, 터치는 길게 눌러야 시작된다 (그냥 밀면 스크롤).
 // 키보드로는 블록(버튼)을 열어 수정 창에서 날짜·시각·길이를 바꾼다.
 import type { App } from '../app.ts';
 import { CLICK_CREATE_MIN, clickRange, dragRange, minutesAtY, movedStart, resizedEnd } from '../../../shared/calendar-layout.ts';
 import { remapReminders } from '../../../shared/reminders.ts';
-import { DEFAULT_DURATION, durationOf, fromMinutes, type ReminderKind } from '../../../shared/task.ts';
+import { addDays } from '../../../shared/calendar.ts';
+import { DEFAULT_DURATION, durationOf, fromMinutes, toMinutes, type ReminderKind } from '../../../shared/task.ts';
 import { formatRange, formatShort } from '../format.ts';
 import type { StoredTask } from '../store/tasks.ts';
 import { h } from './dom.ts';
@@ -33,6 +37,14 @@ interface Change {
 }
 
 const hm = (min: number): string => fromMinutes(Math.min(min, 1439));
+
+/** ⌘C 로 복사해 둔 할 일 (다시 그려도, 다른 주로 가도 남는다) */
+let clipboard: StoredTask | null = null;
+/** 붙여 넣을 자리: 마지막으로 마우스가 있던 칸 */
+let pasteTarget: { date: string; minutes: number | null } | null = null;
+
+/** 입력 중인 곳이면 단축키를 가로채지 않는다 */
+const typing = (el: EventTarget | null): boolean => el instanceof HTMLElement && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
 
 export function enableGridInteractions(app: App, scroller: HTMLElement, o: GridOptions): void {
   const cols = (): HTMLElement[] => [...scroller.querySelectorAll<HTMLElement>('.tg-col')];
@@ -75,6 +87,43 @@ export function enableGridInteractions(app: App, scroller: HTMLElement, o: GridO
         actionLabel: '실행 취소',
         onAction: async () => {
           await app.tasks.editTask(task.id, { ...prev, reminders: task.reminders });
+          await app.refresh();
+        },
+      });
+    } catch (err) {
+      console.error(err);
+      app.toasts.show('저장하지 못했어요. 저장 공간을 확인한 뒤 다시 시도해 주세요.', { duration: 8000 });
+    }
+  }
+
+  /**
+   * task 를 next 자리에 새 할 일로 복사하고 되돌리기 토스트를 보인다.
+   * 반복은 복사하지 않는다 (같은 반복이 두 벌 생기지 않게). 완료 여부도 새로 시작한다.
+   */
+  async function copy(task: StoredTask, next: Change, message: string): Promise<void> {
+    const hadTime = task.dueTime !== null;
+    const hasTime = next.dueTime !== null;
+    const reminders: ReminderKind[] = hadTime === hasTime ? task.reminders : remapReminders(task.reminders, hadTime, hasTime).reminders;
+    try {
+      const r = await app.tasks.addTask({
+        title: task.title,
+        ...next,
+        durationMin: hasTime ? (next.durationMin ?? durationOf(task)) : null,
+        projectId: task.projectId,
+        priority: task.priority,
+        reminders,
+        tags: task.tags ?? [],
+      });
+      if (!r.ok) {
+        app.toasts.show('복사하지 못했어요. 값이 올바르지 않아요.', { duration: 6000 });
+        return;
+      }
+      const id = r.task.id;
+      await app.refresh();
+      app.toasts.show(message, {
+        actionLabel: '실행 취소',
+        onAction: async () => {
+          await app.tasks.deleteTask(id);
           await app.refresh();
         },
       });
@@ -208,10 +257,12 @@ export function enableGridInteractions(app: App, scroller: HTMLElement, o: GridO
     let preview: HTMLElement | null = null;
     let result: { change: Change; label: string } | null = null;
     let overAllday: HTMLElement | null = null;
+    /** Option(Alt)을 누르고 있으면 복사 (끄는 도중에 눌렀다 떼도 따라간다) */
+    let copying = !resize && ev.altKey;
 
     const draw = (col: HTMLElement, start: number, end: number): void => {
       preview?.remove();
-      preview = h('div', { class: 'tg-block tg-preview', 'aria-hidden': 'true', style: `top:${(start * o.hourPx) / 60}px;height:${Math.max(20, ((end - start) * o.hourPx) / 60 - 1)}px;left:1px;right:2px` }, h('span', { class: 'tg-title' }, task.title), h('span', { class: 'tg-time' }, formatRange(start, end)));
+      preview = h('div', { class: `tg-block tg-preview${copying ? ' copying' : ''}`, 'aria-hidden': 'true', style: `top:${(start * o.hourPx) / 60}px;height:${Math.max(20, ((end - start) * o.hourPx) / 60 - 1)}px;left:1px;right:2px` }, h('span', { class: 'tg-title' }, task.title), h('span', { class: 'tg-time' }, formatRange(start, end)));
       col.appendChild(preview);
     };
     const clear = (): void => {
@@ -220,16 +271,22 @@ export function enableGridInteractions(app: App, scroller: HTMLElement, o: GridO
       overAllday?.classList.remove('drop-target');
       overAllday = null;
       block.classList.remove('dragging');
-      scroller.classList.remove('is-dragging');
+      scroller.classList.remove('is-dragging', 'is-copying');
     };
 
     startGesture(ev, {
       onStart: () => {
-        block.classList.add('dragging');
+        block.classList.toggle('dragging', !copying);
         scroller.classList.add('is-dragging');
+        scroller.classList.toggle('is-copying', copying);
         draw(originCol, origStart, origEnd);
       },
       onMove: (e) => {
+        if (!resize && e.altKey !== copying) {
+          copying = e.altKey;
+          block.classList.toggle('dragging', !copying);
+          scroller.classList.toggle('is-copying', copying);
+        }
         const delta = ((e.clientY - startY) * 60) / o.hourPx;
         if (resize) {
           const end = resizedEnd(origStart, origEnd, delta);
@@ -268,6 +325,10 @@ export function enableGridInteractions(app: App, scroller: HTMLElement, o: GridO
         clear();
         const r = result;
         if (!r) return;
+        if (copying) {
+          await copy(task, r.change, r.label.replace(/(하루 종일)?로 옮겼어요$/, (_m, allDay?: string) => (allDay ? '하루 종일로 복사했어요' : '에 복사했어요')));
+          return;
+        }
         const same = r.change.dueDate === task.dueDate && r.change.dueTime === task.dueTime && r.change.durationMin === durationOf(task);
         if (!same) await apply(task, r.change, r.label);
       },
@@ -333,8 +394,8 @@ export function enableGridInteractions(app: App, scroller: HTMLElement, o: GridO
     if (!chip) return;
     ev.dataTransfer?.setData(TASK_DRAG_TYPE, chip.dataset.taskId!);
     ev.dataTransfer?.setData('text/plain', chip.textContent ?? '');
-    if (ev.dataTransfer) ev.dataTransfer.effectAllowed = 'move';
-    chip.classList.add('dragging');
+    if (ev.dataTransfer) ev.dataTransfer.effectAllowed = 'copyMove';
+    if (!ev.altKey) chip.classList.add('dragging');
     beginDrag();
   });
   scroller.addEventListener('dragend', () => {
@@ -347,7 +408,7 @@ export function enableGridInteractions(app: App, scroller: HTMLElement, o: GridO
     const zone = (ev.target as HTMLElement).closest<HTMLElement>('.tg-allday-cell, .tg-col');
     if (!zone) return;
     ev.preventDefault();
-    if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'move';
+    if (ev.dataTransfer) ev.dataTransfer.dropEffect = ev.altKey ? 'copy' : 'move';
     scroller.querySelectorAll('.drop-target').forEach((el) => el !== zone && el.classList.remove('drop-target'));
     zone.classList.add('drop-target');
   });
@@ -358,14 +419,206 @@ export function enableGridInteractions(app: App, scroller: HTMLElement, o: GridO
     zone.classList.remove('drop-target');
     const task = draggedTask(ev);
     if (!task?.dueDate) return;
+    const copying = ev.altKey || ev.dataTransfer?.dropEffect === 'copy';
     const date = zone.dataset.date!;
     if (zone.classList.contains('tg-allday-cell')) {
+      if (copying) return void copy(task, { dueDate: date, dueTime: task.dueTime, durationMin: durationOf(task) }, `${formatShort(date)}에 복사했어요`);
       if (date === task.dueDate) return;
       void apply(task, { dueDate: date, dueTime: task.dueTime, durationMin: durationOf(task) }, `${formatShort(date)}로 옮겼어요`);
       return;
     }
     // 시간 열에 놓으면 그 시각의 일정이 된다 (길이는 기본 한 시간)
     const start = clickRange(minutesAtY(ev.clientY - zone.getBoundingClientRect().top, o.hourPx)).start;
-    void apply(task, { dueDate: date, dueTime: hm(start), durationMin: durationOf(task) ?? DEFAULT_DURATION }, `${formatShort(date)} ${formatRange(start, start + DEFAULT_DURATION).split(' ~ ')[0]}로 옮겼어요`);
+    const change: Change = { dueDate: date, dueTime: hm(start), durationMin: durationOf(task) ?? DEFAULT_DURATION };
+    const where = `${formatShort(date)} ${formatRange(start, start + DEFAULT_DURATION).split(' ~ ')[0]}`;
+    void (copying ? copy(task, change, `${where}에 복사했어요`) : apply(task, change, `${where}로 옮겼어요`));
   });
+
+  // ── 복사·붙여넣기 (⌘/Ctrl+C, ⌘/Ctrl+V, 우클릭 메뉴) ──
+  function copyToClipboard(task: StoredTask): void {
+    clipboard = task;
+    app.toasts.show(`'${task.title}'을(를) 복사했어요. 붙여 넣을 칸을 우클릭하거나, 마우스를 두고 ⌘V 를 누르세요.`);
+  }
+
+  /** 복사해 둔 할 일을 target 자리에 붙여 넣는다 (자리가 없으면 원래 일정의 다음 날 같은 시각) */
+  function paste(target: { date: string; minutes: number | null } | null): void {
+    const src = clipboard;
+    if (!src?.dueDate) return;
+    const at = target ?? { date: addDays(src.dueDate, 1), minutes: src.dueTime ? toMinutes(src.dueTime) : null };
+    if (at.minutes === null) {
+      void copy(src, { dueDate: at.date, dueTime: null, durationMin: null }, `${formatShort(at.date)} 하루 종일로 붙여 넣었어요`);
+      return;
+    }
+    const dur = durationOf(src) ?? DEFAULT_DURATION;
+    const start = Math.min(at.minutes, Math.max(0, 1440 - dur));
+    void copy(src, { dueDate: at.date, dueTime: hm(start), durationMin: dur }, `${formatShort(at.date)} ${formatRange(start, start + dur).split(' ~ ')[0]}에 붙여 넣었어요`);
+  }
+
+  /** 우클릭(또는 메뉴 키·Shift+F10) 메뉴 */
+  scroller.addEventListener('contextmenu', (ev) => {
+    if (scroller.classList.contains('is-dragging')) return;
+    const t = ev.target as HTMLElement;
+    // 키보드로 연 메뉴는 좌표가 없다: 포커스된 요소 옆에 연다
+    const kb = ev.button !== 2 || (ev.clientX === 0 && ev.clientY === 0);
+    const el = t.closest<HTMLElement>('.tg-block[data-task-id], .tg-chip[data-task-id]');
+    const r = t.getBoundingClientRect();
+    const x = kb ? r.left + 8 : ev.clientX;
+    const y = kb ? r.top + Math.min(r.height, 24) : ev.clientY;
+    if (el) {
+      const task = o.tasks.get(el.dataset.taskId!);
+      if (!task?.dueDate) return;
+      ev.preventDefault();
+      openMenu(x, y, task.title, [
+        { label: '복사', shortcut: '⌘C', run: () => copyToClipboard(task) },
+        { label: '삭제', danger: true, run: () => void removeTask(app, task) },
+      ], el);
+      return;
+    }
+    const cell = t.closest<HTMLElement>('.tg-allday-cell');
+    const col = t.closest<HTMLElement>('.tg-col');
+    if (!cell && !col) return;
+    if (t.closest('.tg-block, .tg-chip')) return; // 구글 일정·반복 예정은 메뉴 없음 (브라우저 메뉴 그대로)
+    ev.preventDefault();
+    const target = cell
+      ? { date: cell.dataset.date!, minutes: null }
+      : { date: col!.dataset.date!, minutes: clickRange(minutesAtY(y - col!.getBoundingClientRect().top, o.hourPx)).start };
+    const when = target.minutes === null ? `${formatShort(target.date)} 하루 종일` : `${formatShort(target.date)} ${formatRange(target.minutes, target.minutes + 30).split(' ~ ')[0]}`;
+    openMenu(x, y, when, [{ label: clipboard ? `'${clipboard.title}' 붙여넣기` : '붙여넣기', shortcut: '⌘V', disabled: !clipboard, run: () => paste(target) }], scroller);
+  });
+
+  scroller.addEventListener(
+    'pointermove',
+    (ev) => {
+      const t = ev.target as HTMLElement;
+      const cell = t.closest<HTMLElement>('.tg-allday-cell');
+      if (cell) return void (pasteTarget = { date: cell.dataset.date!, minutes: null });
+      const col = t.closest<HTMLElement>('.tg-col');
+      if (col) pasteTarget = { date: col.dataset.date!, minutes: clickRange(minutesAtY(ev.clientY - col.getBoundingClientRect().top, o.hourPx)).start };
+    },
+    { passive: true },
+  );
+  scroller.addEventListener('pointerleave', () => (pasteTarget = null));
+
+  const onShortcut = (ev: KeyboardEvent): void => {
+    // 다시 그려져 떨어진 격자의 단축키는 거둔다
+    if (!scroller.isConnected) return document.removeEventListener('keydown', onShortcut);
+    if (!(ev.metaKey || ev.ctrlKey) || ev.altKey || ev.shiftKey || typing(ev.target)) return;
+    if (document.querySelector('dialog[open]')) return;
+    const key = ev.key.toLowerCase();
+    if (key === 'c') {
+      const el = (ev.target as HTMLElement).closest?.<HTMLElement>('.tg-block[data-task-id], .tg-chip[data-task-id]');
+      const task = el && scroller.contains(el) ? o.tasks.get(el.dataset.taskId!) : undefined;
+      if (!task?.dueDate || window.getSelection()?.toString()) return;
+      ev.preventDefault();
+      copyToClipboard(task);
+    } else if (key === 'v' && clipboard?.dueDate) {
+      ev.preventDefault();
+      paste(pasteTarget);
+    }
+  };
+  document.addEventListener('keydown', onShortcut);
 }
+
+interface MenuItem {
+  label: string;
+  shortcut?: string;
+  danger?: boolean;
+  disabled?: boolean;
+  run: () => void;
+}
+
+/** 지금 열린 우클릭 메뉴를 닫는 함수 */
+let closeOpenMenu: (() => void) | null = null;
+
+/** (x, y) 에 작은 메뉴를 연다. 바깥을 누르거나 Esc·스크롤·창 크기 변경이면 닫히고, 닫히면 returnFocus 로 포커스를 돌려준다 */
+function openMenu(x: number, y: number, name: string, items: MenuItem[], returnFocus: HTMLElement): void {
+  closeOpenMenu?.();
+  const buttons = items.map((it) =>
+    h(
+      'button',
+      {
+        type: 'button',
+        role: 'menuitem',
+        class: `tg-menu-item${it.danger ? ' danger' : ''}`,
+        disabled: it.disabled ? true : null,
+        tabindex: '-1',
+        onclick: () => {
+          close(true);
+          it.run();
+        },
+      },
+      h('span', {}, it.label),
+      it.shortcut ? h('span', { class: 'tg-menu-key', 'aria-hidden': 'true' }, it.shortcut) : null,
+    ),
+  );
+  const menu = h('div', { class: 'tg-menu', role: 'menu', 'aria-label': `${name} 메뉴` }, ...buttons);
+  document.body.appendChild(menu);
+  // 화면 밖으로 나가지 않게
+  const r = menu.getBoundingClientRect();
+  menu.style.left = `${Math.max(4, Math.min(x, window.innerWidth - r.width - 4))}px`;
+  menu.style.top = `${Math.max(4, Math.min(y, window.innerHeight - r.height - 4))}px`;
+
+  const enabled = (): HTMLButtonElement[] => buttons.filter((b) => !(b as HTMLButtonElement).disabled) as HTMLButtonElement[];
+  const focusAt = (i: number): void => {
+    const list = enabled();
+    if (list.length) list[(i + list.length) % list.length]!.focus();
+  };
+  focusAt(0);
+
+  const onDown = (e: PointerEvent): void => {
+    if (!menu.contains(e.target as Node)) close(false);
+  };
+  const onKey = (e: KeyboardEvent): void => {
+    const list = enabled();
+    const i = list.indexOf(document.activeElement as HTMLButtonElement);
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      close(true);
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      focusAt(i + 1);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      focusAt(i - 1);
+    } else if (e.key === 'Tab') close(false);
+  };
+  const onAway = (): void => close(false);
+  function close(restore: boolean): void {
+    if (!menu.isConnected) return;
+    menu.remove();
+    closeOpenMenu = null;
+    window.removeEventListener('pointerdown', onDown, true);
+    window.removeEventListener('keydown', onKey, true);
+    window.removeEventListener('resize', onAway);
+    window.removeEventListener('blur', onAway);
+    document.removeEventListener('scroll', onAway, true);
+    if (restore && returnFocus.isConnected) returnFocus.focus({ preventScroll: true });
+  }
+  closeOpenMenu = () => close(false);
+  window.addEventListener('pointerdown', onDown, true);
+  window.addEventListener('keydown', onKey, true);
+  window.addEventListener('resize', onAway);
+  window.addEventListener('blur', onAway);
+  document.addEventListener('scroll', onAway, true);
+}
+
+/** 할 일을 지우고 "실행 취소"를 보인다 (목록의 삭제와 같다) */
+export async function removeTask(app: App, t: StoredTask): Promise<void> {
+  try {
+    const r = await app.tasks.deleteTask(t.id);
+    if (!r.ok) return;
+    await app.refresh();
+    app.toasts.show('삭제했어요', {
+      actionLabel: '실행 취소',
+      onAction: async () => {
+        await app.tasks.undoDelete();
+        await app.refresh();
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    app.toasts.show('삭제하지 못했어요. 저장 공간을 확인한 뒤 다시 시도해 주세요.', { duration: 8000 });
+  }
+}
+

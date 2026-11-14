@@ -214,3 +214,88 @@ test('하루 종일 칩도 Delete 키로 삭제할 수 있다', async ({ page })
   await page.keyboard.press('Backspace');
   await expect(page.locator('.tg-chip', { hasText: '종일 일정' })).toHaveCount(0);
 });
+
+test('주 보기: Option(Alt)을 누른 채 블록을 옆 열로 끌면 복사되고 원래 블록은 그대로다. 실행 취소하면 복사본만 사라진다', async ({ page }) => {
+  await openApp(page);
+  await addTimed(page, '스터디', '13:00', '2시간');
+  await openCalendar(page, '주');
+  const box = (await block(page, '스터디').boundingBox())!;
+  const next = (await col(page, '2026-11-13').boundingBox())!;
+  await page.keyboard.down('Alt');
+  await drag(page, { x: box.x + box.width / 2, y: box.y + 20 }, { x: next.x + next.width / 2, y: box.y + 20 + HOUR });
+  await page.keyboard.up('Alt');
+  const copied = col(page, '2026-11-13').locator('.tg-block', { hasText: '스터디' });
+  await expect(copied).toHaveCSS('top', `${14 * HOUR}px`);
+  await expect(copied).toHaveCSS('height', `${2 * HOUR - 1}px`); // 길이도 같다
+  await expect(col(page, '2026-11-12').locator('.tg-block', { hasText: '스터디' })).toHaveCSS('top', `${13 * HOUR}px`);
+  await expect(page.getByText(/에 복사했어요/)).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('button', { name: '실행 취소' }).click();
+  await expect(copied).toHaveCount(0);
+  await expect(col(page, '2026-11-12').locator('.tg-block', { hasText: '스터디' })).toBeVisible();
+});
+
+test('블록에 포커스를 두고 ⌘/Ctrl+C, 마우스를 둔 칸에서 ⌘/Ctrl+V 를 누르면 그 칸에 붙여 넣는다', async ({ page }) => {
+  await openApp(page);
+  await addTimed(page, '회의', '10:00', '1시간');
+  await openCalendar(page, '주');
+  await block(page, '회의').focus();
+  await page.keyboard.press('ControlOrMeta+c');
+  await expect(page.getByText(/복사했어요/)).toBeVisible();
+  const p = await at(col(page, '2026-11-14'), 11 * 60 + 10);
+  await page.mouse.move(p.x, p.y);
+  await page.keyboard.press('ControlOrMeta+v');
+  await expect(col(page, '2026-11-14').locator('.tg-block', { hasText: '회의' })).toHaveCSS('top', `${11 * HOUR}px`);
+  await expect(col(page, '2026-11-12').locator('.tg-block', { hasText: '회의' })).toBeVisible();
+  // 한 번 더 붙여 넣을 수 있다
+  const q = await at(col(page, '2026-11-10'), 9 * 60 + 10);
+  await page.mouse.move(q.x, q.y);
+  await page.keyboard.press('ControlOrMeta+v');
+  await expect(col(page, '2026-11-10').locator('.tg-block', { hasText: '회의' })).toHaveCSS('top', `${9 * HOUR}px`);
+});
+
+test('마우스가 격자 밖에 있으면 ⌘/Ctrl+V 는 복사한 일정의 다음 날 같은 시각에 붙여 넣는다. 하루 종일 칩도 복사된다', async ({ page }) => {
+  await openApp(page);
+  await addTimed(page, '종일 행사', null, null);
+  await openCalendar(page, '주');
+  await page.locator('.tg-chip', { hasText: '종일 행사' }).focus();
+  await page.keyboard.press('ControlOrMeta+c');
+  await page.mouse.move(1, 1);
+  await page.keyboard.press('ControlOrMeta+v');
+  await expect(page.locator('.tg-allday-cell[data-date="2026-11-13"] .tg-chip', { hasText: '종일 행사' })).toBeVisible();
+  await expect(page.locator('.tg-allday-cell[data-date="2026-11-12"] .tg-chip', { hasText: '종일 행사' })).toBeVisible();
+});
+
+test('블록을 우클릭해 "복사"를 고르고, 빈 칸을 우클릭해 "붙여넣기"를 고르면 그 칸에 복사된다', async ({ page }) => {
+  await openApp(page);
+  await addTimed(page, '세미나', '10:00', '1시간');
+  await openCalendar(page, '주');
+  await block(page, '세미나').click({ button: 'right' });
+  const menu = page.getByRole('menu');
+  await expect(menu).toBeVisible();
+  await menu.getByRole('menuitem', { name: '복사' }).click();
+  await expect(menu).toHaveCount(0);
+  await expect(page.getByRole('dialog')).toHaveCount(0); // 우클릭은 수정 창을 열지 않는다
+  const p = await at(col(page, '2026-11-13'), 11 * 60 + 40);
+  await page.mouse.click(p.x, p.y, { button: 'right' });
+  await page.getByRole('menuitem', { name: /세미나.*붙여넣기/ }).click();
+  await expect(col(page, '2026-11-13').locator('.tg-block', { hasText: '세미나' })).toHaveCSS('top', `${11.5 * HOUR}px`);
+  await expect(col(page, '2026-11-12').locator('.tg-block', { hasText: '세미나' })).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0); // 만들기 창도 열리지 않는다
+});
+
+test('우클릭 메뉴: 복사한 것이 없으면 붙여넣기는 비활성, Esc 로 닫힌다. 블록 메뉴의 "삭제"로 지울 수 있다', async ({ page }) => {
+  await openApp(page);
+  await addTimed(page, '지울 일정', '10:00', '1시간');
+  await openCalendar(page, '주');
+  const p = await at(col(page, '2026-11-13'), 11 * 60 + 10);
+  await page.mouse.click(p.x, p.y, { button: 'right' });
+  await expect(page.getByRole('menuitem', { name: '붙여넣기' })).toBeDisabled();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await block(page, '지울 일정').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: '삭제' }).click();
+  await expect(page.locator('.tg-block', { hasText: '지울 일정' })).toHaveCount(0);
+  await page.getByRole('button', { name: '실행 취소' }).click();
+  await expect(block(page, '지울 일정')).toBeVisible();
+});
