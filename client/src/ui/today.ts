@@ -10,7 +10,7 @@ import { renderCompleted, renderQuickAdd, renderTaskList } from './task-list.ts'
 export const renderToday: ViewRenderer = async (app, root) => {
   const today = app.today();
   const v = await todayView(app.ctx.db, today);
-  const rowOpts = { today, projects: await projectLabels(app.ctx.db) };
+  const rowOpts = { today, projects: await projectLabels(app.ctx.db), reorderable: true };
 
   root.appendChild(h('div', { class: 'view-header' }, h('h2', {}, '오늘'), h('p', { class: 'view-sub' }, formatLong(today))));
   // 오늘의 구글 캘린더 일정 (불러오기를 켜지 않았거나 실패하면 없다)

@@ -37,7 +37,7 @@ export interface AddInput {
 }
 
 export type EditChanges = Partial<
-  Pick<Task, 'title' | 'dueDate' | 'dueTime' | 'durationMin' | 'projectId' | 'priority' | 'recurrence' | 'reminders' | 'tags'>
+  Pick<Task, 'title' | 'dueDate' | 'dueTime' | 'durationMin' | 'projectId' | 'priority' | 'recurrence' | 'reminders' | 'tags' | 'sortKey'>
 >;
 
 /** 태그를 일괄로 바꾸기 전의 한 할 일의 태그 (되돌리기용) */

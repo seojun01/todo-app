@@ -20,7 +20,7 @@ export const renderProject: ViewRenderer = async (app, root, params) => {
 
   const today = app.today();
   const { open, completed } = await projectTasks(app.ctx.db, projectId);
-  const rowOpts = { today, showDate: true };
+  const rowOpts = { today, showDate: true, reorderable: true };
 
   const header = h('div', { class: 'view-header' }, h('h2', {}, project ? project.name : '수신함'));
   if (project) {

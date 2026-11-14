@@ -1,4 +1,5 @@
 // Task / Project / Settings 타입과 검증 규칙. 서버와 클라이언트가 같은 코드로 검증한다.
+import { isValidSortKey } from './order.ts';
 import { daysInMonth } from './calendar.ts';
 
 export type CalendarDate = string; // YYYY-MM-DD
@@ -38,6 +39,8 @@ export interface Task {
   reminders: ReminderKind[];
   /** 태그(라벨). 옛 기기·옛 데이터에는 없을 수 있다 — 읽을 때는 tagsOf() 를 쓴다 */
   tags?: string[];
+  /** 목록에서 끌어서 정한 순서 (shared/order.ts). 없으면 자동 정렬(우선순위 → 시각 → 만든 순서)을 따른다 */
+  sortKey?: string | null;
   done: boolean;
   createdAt: string;
   deleted: boolean;
@@ -256,6 +259,8 @@ export function validateTask(t: Task): FieldError[] {
     else if (!t.tags.every(isValidTag)) add('tags', 'format');
     else if (new Set(t.tags.map(tagKey)).size !== t.tags.length) add('tags', 'unique');
   }
+
+  if (t.sortKey !== undefined && t.sortKey !== null && !isValidSortKey(t.sortKey)) add('sortKey', 'format');
 
   if (t.projectId !== INBOX_ID && !isUuid(t.projectId)) add('projectId', 'format');
   if (typeof t.done !== 'boolean') add('done', 'type');

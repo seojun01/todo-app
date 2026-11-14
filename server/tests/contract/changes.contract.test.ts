@@ -268,3 +268,27 @@ test('태그: 잘못된 태그가 하나라도 있으면 400 이고 아무것도
   assert.equal((srv.db.prepare('SELECT COUNT(*) AS n FROM tasks').get() as { n: number }).n, 0);
   await srv.close();
 });
+
+test('순서: push 한 sortKey 는 pull 로 그대로 나오고, 정한 적 없는 레코드에는 필드가 없다. 잘못된 키는 400', async () => {
+  const srv = await startTestServer();
+  const { cookie: c } = await srv.pair();
+  const push = (rec: Record<string, any>) => srv.api('/api/changes', { cookie: c, body: { changes: [{ type: 'task', record: rec }] } });
+  const pull = async () => ((await (await srv.api('/api/changes?since=0', { cookie: c })).json()) as { changes: { record: any }[] }).changes.map((x) => x.record);
+
+  const ordered = mkTask({ sortKey: 'i' });
+  const plain = mkTask({ title: '순서 없음' });
+  assert.equal((await push(ordered)).status, 200);
+  assert.equal((await push(plain)).status, 200);
+  let out = await pull();
+  assert.equal(out.find((r) => r.id === ordered.id)!.sortKey, 'i');
+  assert.equal('sortKey' in out.find((r) => r.id === plain.id)!, false);
+
+  assert.equal((await push({ ...ordered, sortKey: '3', version: '001762950896789-999999-dev' })).status, 200);
+  out = await pull();
+  assert.equal(out.find((r) => r.id === ordered.id)!.sortKey, '3');
+
+  for (const bad of ['', 'A', 'a0', 'x'.repeat(65), 5]) {
+    assert.equal((await push(mkTask({ sortKey: bad as any }))).status, 400, JSON.stringify(bad));
+  }
+  await srv.close();
+});

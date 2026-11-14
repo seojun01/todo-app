@@ -150,6 +150,10 @@ const MIGRATIONS: Migration[] = [
   (db) => {
     db.exec(`ALTER TABLE tasks ADD COLUMN duration_min INTEGER;`);
   },
+  // v6: 목록에서 끌어서 정한 순서 키 (shared/order.ts). 비어 있으면 자동 정렬. 옛 클라이언트가 보내지 않아도 된다
+  (db) => {
+    db.exec(`ALTER TABLE tasks ADD COLUMN sort_key TEXT;`);
+  },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

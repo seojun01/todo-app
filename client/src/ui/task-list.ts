@@ -8,6 +8,7 @@ import type { ProjectLabel } from '../views.ts';
 import type { StoredTask } from '../store/tasks.ts';
 import { h } from './dom.ts';
 import { beginDrag, endDrag } from './drag-guard.ts';
+import { enableReorder } from './list-reorder.ts';
 import { PRIORITY_LABELS, describeErrors, limitTitle, openTaskEditor } from './task-editor.ts';
 
 export interface RowOptions {
@@ -21,6 +22,8 @@ export interface RowOptions {
   now?: Date;
   /** 카드를 끌어 다른 날짜 칸으로 옮길 수 있게 한다 (예정 화면) */
   draggable?: boolean;
+  /** 카드를 끌어(또는 Alt+↑/↓) 순서를 바꿀 수 있게 한다 (오늘·수신함·프로젝트·태그 화면) */
+  reorderable?: boolean;
 }
 
 /** 끌고 있는 카드의 id 를 dataTransfer 에 싣는 형식 */
@@ -155,7 +158,7 @@ function renderRow(app: App, t: StoredTask, opts: RowOptions): HTMLLIElement {
 
   const li = h(
     'li',
-    { class: `task${t.done ? ' done' : ''}`, 'data-key': `task:${t.id}`, draggable: opts.draggable && !t.done ? 'true' : null },
+    { class: `task${t.done ? ' done' : ''}`, 'data-key': `task:${t.id}`, 'data-task-id': t.id, draggable: opts.draggable && !t.done ? 'true' : null },
     check,
     h('div', { class: 'task-main' }, h('p', { class: 'task-title', id: titleId }, t.title), meta.length ? h('div', { class: 'task-meta' }, ...meta) : null),
     h('div', { class: 'task-actions' }, edit, del),
@@ -205,13 +208,16 @@ export function renderGhostList(app: App, tasks: StoredTask[], opts: RowOptions)
 }
 
 export function renderTaskList(app: App, tasks: StoredTask[], opts: RowOptions): HTMLUListElement {
-  return h('ul', { class: 'tasks' }, ...tasks.map((t) => renderRow(app, t, opts)));
+  const ul = h('ul', { class: 'tasks' }, ...tasks.map((t) => renderRow(app, t, opts)));
+  // 완료한 할 일은 순서를 바꾸지 않는다
+  if (opts.reorderable) enableReorder(app, ul, tasks.filter((t) => !t.done));
+  return ul;
 }
 
 /** 접힌 "완료됨" 영역. 완료한 할 일이 없으면 null */
 export function renderCompleted(app: App, tasks: StoredTask[], opts: RowOptions): HTMLElement | null {
   if (tasks.length === 0) return null;
-  const details = h('details', { class: 'completed' }, h('summary', { 'data-key': 'completed-summary' }, `완료됨 (${tasks.length})`), renderTaskList(app, tasks, opts));
+  const details = h('details', { class: 'completed' }, h('summary', { 'data-key': 'completed-summary' }, `완료됨 (${tasks.length})`), renderTaskList(app, tasks, { ...opts, reorderable: false }));
   // 지금 화면에 이미 펼쳐진 영역이 있으면 그 실제 상태를 따른다. 사용자가 펼치면 브라우저가 open 속성을 바로 바꾸지만
   // toggle 이벤트(비동기)가 오기 전에 다시 그리면 접힌 모습으로 되돌려 버리기 때문이다.
   const live = document.querySelector<HTMLDetailsElement>('details.completed');

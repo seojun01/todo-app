@@ -422,6 +422,31 @@ li.task {
 .task-title {
   margin: 0;
 }
+/* 목록 순서 바꾸기: 집은 카드는 떠올라 손을 따라온다 */
+ul.tasks.reorderable > li.task:not(.done) {
+  -webkit-touch-callout: none;
+}
+ul.tasks.is-reordering,
+ul.tasks.is-reordering * {
+  cursor: grabbing !important;
+  user-select: none;
+  -webkit-user-select: none;
+}
+li.task.lifted {
+  position: relative;
+  z-index: 5;
+  background: var(--bg);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.18);
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  ul.tasks.is-reordering > li.task:not(.lifted) {
+    transition: transform 0.12s;
+  }
+}
+
 li.task.done .task-title {
   text-decoration: line-through;
   color: var(--muted);

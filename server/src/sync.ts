@@ -37,6 +37,8 @@ export const rowToTask = (r: Row): Task => ({
   recurrence: r.recurrence ? JSON.parse(r.recurrence) : null,
   reminders: JSON.parse(r.reminders),
   tags: r.tags ? JSON.parse(r.tags) : [],
+  // 순서를 정한 적 없는 할 일에는 필드를 싣지 않는다 (옛 레코드와 모양이 같게)
+  ...(r.sort_key != null ? { sortKey: r.sort_key as string } : {}),
   done: r.done === 1,
   createdAt: r.created_at,
   deleted: r.deleted === 1,
@@ -131,18 +133,18 @@ export function applyChanges(db: Db, body: unknown, now: Date = new Date()): { a
         const armedAt = !existing || alarmKey(existing) !== alarmKey(incoming) ? nowIso : (row!.armed_at as string);
         const params = [
           incoming.title, incoming.dueDate, incoming.dueTime, incoming.durationMin ?? null, incoming.projectId, incoming.priority,
-          incoming.recurrence ? JSON.stringify(incoming.recurrence) : null, JSON.stringify(incoming.reminders), JSON.stringify(tagsOf(incoming)),
+          incoming.recurrence ? JSON.stringify(incoming.recurrence) : null, JSON.stringify(incoming.reminders), JSON.stringify(tagsOf(incoming)), incoming.sortKey ?? null,
           incoming.done ? 1 : 0, incoming.createdAt, incoming.deleted ? 1 : 0, incoming.version, incoming.updatedBy, bump(), armedAt,
         ] as const;
         if (existing) {
           db.prepare(
-            `UPDATE tasks SET title=?, due_date=?, due_time=?, duration_min=?, project_id=?, priority=?, recurrence=?, reminders=?, tags=?, done=?,
+            `UPDATE tasks SET title=?, due_date=?, due_time=?, duration_min=?, project_id=?, priority=?, recurrence=?, reminders=?, tags=?, sort_key=?, done=?,
              created_at=?, deleted=?, version=?, updated_by=?, seq=?, armed_at=? WHERE id=?`,
           ).run(...params, incoming.id);
         } else {
           db.prepare(
-            `INSERT INTO tasks (title, due_date, due_time, duration_min, project_id, priority, recurrence, reminders, tags, done,
-             created_at, deleted, version, updated_by, seq, armed_at, id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+            `INSERT INTO tasks (title, due_date, due_time, duration_min, project_id, priority, recurrence, reminders, tags, sort_key, done,
+             created_at, deleted, version, updated_by, seq, armed_at, id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           ).run(...params, incoming.id);
         }
         applied++;

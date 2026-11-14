@@ -8,7 +8,7 @@ import { renderCompleted, renderTaskList } from './task-list.ts';
 export const renderTag: ViewRenderer = async (app, root, params) => {
   const tag = params[0] ?? '';
   const { open, completed } = await tagTasks(app.ctx.db, tag);
-  const rowOpts = { today: app.today(), showDate: true, projects: await projectLabels(app.ctx.db) };
+  const rowOpts = { today: app.today(), showDate: true, projects: await projectLabels(app.ctx.db), reorderable: true };
 
   root.appendChild(
     h(

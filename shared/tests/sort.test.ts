@@ -70,3 +70,17 @@ test('정렬은 입력 배열을 바꾸지 않고 안정적이다', () => {
   assert.deepEqual(input, snapshot);
   assert.equal(compareTasks(a, a), 0);
 });
+
+test('직접 정한 순서(sortKey)가 있는 할 일이 먼저, 그 순서대로 — 우선순위보다 앞선다. 키가 없는 것은 그 뒤에 자동 정렬', () => {
+  const a = t({ title: 'p1-no-key', priority: 1 });
+  const b = t({ title: 'p4-key-2', priority: 4, sortKey: '2' });
+  const c = t({ title: 'p3-key-1', priority: 3, sortKey: '1' });
+  const d = t({ title: 'p4-no-key', priority: 4 });
+  assert.deepEqual(titles(sortTasks([d, a, b, c])), ['p3-key-1', 'p4-key-2', 'p1-no-key', 'p4-no-key']);
+});
+
+test('기한 지남: 직접 정한 순서가 날짜보다 먼저', () => {
+  const old = t({ title: 'old', dueDate: '2026-11-01' });
+  const newer = t({ title: 'newer-key', dueDate: '2026-11-10', sortKey: 'i' });
+  assert.deepEqual(titles(sortOverdue([old, newer])), ['newer-key', 'old']);
+});
