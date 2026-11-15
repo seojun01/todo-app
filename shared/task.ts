@@ -33,6 +33,8 @@ export interface Task {
   dueTime: ClockTime | null;
   /** 시각이 있는 할 일의 길이(분). 캘린더에서 시작 시각부터 이 길이만큼의 블록으로 그린다. 옛 데이터에는 없다 — 읽을 때는 durationOf() 를 쓴다 */
   durationMin?: number | null;
+  /** 장소. 옛 데이터·옛 기기에는 없다 — 읽을 때는 locationOf() 를 쓴다 */
+  location?: string | null;
   projectId: string; // 'inbox' 또는 프로젝트 UUID
   priority: Priority;
   recurrence: Recurrence | null;
@@ -85,6 +87,7 @@ export const MAX_DURATION = 1439;
 export const DEFAULT_DURATION = 60;
 export const MAX_PROJECT_NAME = 50;
 /** 태그 하나의 길이(코드 포인트)와 할 일 하나에 붙일 수 있는 개수 */
+export const MAX_LOCATION = 200;
 export const MAX_TAG = 30;
 export const MAX_TAGS = 10;
 
@@ -103,6 +106,15 @@ export const toMinutes = (time: ClockTime): number => Number(time.slice(0, 2)) *
 
 /** 자정부터의 분 → "HH:MM" (24:00 은 "24:00" 으로 돌려준다 — 표시용) */
 export const fromMinutes = (min: number): string => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+
+/** 옛 데이터에는 location 이 없다 */
+export const locationOf = (t: Pick<Task, 'location'>): string | null => t.location ?? null;
+
+/** 장소 입력을 다듬는다: 앞뒤 공백을 떼고, 비면 null */
+export const normalizeLocation = (v: string | null | undefined): string | null => {
+  const s = (v ?? '').trim();
+  return s === '' ? null : s;
+};
 
 /** 옛 데이터에는 tags 가 없다 */
 export const tagsOf = (t: Pick<Task, 'tags'>): string[] => t.tags ?? [];
@@ -234,6 +246,12 @@ export function validateTask(t: Task): FieldError[] {
     if (!Number.isInteger(t.durationMin) || t.durationMin < MIN_DURATION || t.durationMin > MAX_DURATION) add('durationMin', 'range');
     else if (t.dueTime === null) add('durationMin', 'requires-dueTime');
     else if (isValidTime(t.dueTime) && toMinutes(t.dueTime) + t.durationMin > 1440) add('durationMin', 'crosses-midnight');
+  }
+
+  if (t.location !== undefined && t.location !== null) {
+    if (typeof t.location !== 'string') add('location', 'type');
+    else if (t.location.trim() === '' || t.location.trim() !== t.location) add('location', 'trim');
+    else if ([...t.location].length > MAX_LOCATION) add('location', 'length');
   }
 
   if (!(t.priority === 1 || t.priority === 2 || t.priority === 3 || t.priority === 4)) add('priority', 'range');

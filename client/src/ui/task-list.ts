@@ -3,7 +3,7 @@ import type { App } from '../app.ts';
 import { formatShort, formatTime } from '../format.ts';
 import { describeRecurrence } from '../../../shared/recurrence.ts';
 import { REMINDER_LABELS } from '../../../shared/reminders.ts';
-import { INBOX_ID, MAX_TITLE, splitInlineTags, tagsOf } from '../../../shared/task.ts';
+import { INBOX_ID, MAX_TITLE, locationOf, splitInlineTags, tagsOf } from '../../../shared/task.ts';
 import type { ProjectLabel } from '../views.ts';
 import type { StoredTask } from '../store/tasks.ts';
 import { h } from './dom.ts';
@@ -64,6 +64,9 @@ function buildMeta(t: StoredTask, opts: RowOptions, withDate = true): (Node | st
     const nowHm = opts.now ? `${String(opts.now.getHours()).padStart(2, '0')}:${String(opts.now.getMinutes()).padStart(2, '0')}` : null;
     const timePassed = !t.done && nowHm !== null && t.dueDate === opts.today && t.dueTime < nowHm;
     meta.push(h('span', { class: `chip${timePassed ? ' past-time' : ''}` }, formatTime(t.dueTime), timePassed ? h('span', { class: 'sr-only' }, ' (시각이 지났어요)') : null));
+  }
+  if (locationOf(t)) {
+    meta.push(h('span', { class: 'chip' }, h('span', { 'aria-hidden': 'true' }, '📍'), h('span', { class: 'sr-only' }, '장소: '), locationOf(t)!));
   }
   if (t.recurrence) {
     meta.push(h('span', { class: 'chip' }, h('span', { 'aria-hidden': 'true' }, '↻'), `반복: ${describeRecurrence(t.recurrence)}`));

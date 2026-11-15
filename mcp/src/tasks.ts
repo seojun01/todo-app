@@ -12,7 +12,12 @@ import {
   normalizeTags,
   tagKey,
   durationOf,
+  fromMinutes,
+  isValidTime,
+  locationOf,
+  normalizeLocation,
   tagsOf,
+  toMinutes,
   validateTask,
   validateTitle,
   type FieldError,
@@ -101,6 +106,15 @@ const FIELD_NAMES: Record<string, string> = {
   createdAt: 'created_at',
 };
 
+/** end_time(HH:MM)을 시작 시각 기준의 길이(분)로 바꾼다. 같은 날 안에서 시작보다 늦어야 한다 */
+function durationFromEnd(start: string | null, end: unknown): number {
+  if (typeof end !== 'string' || !isValidTime(end)) throw new ToolError('end_time 은 HH:MM (24시간) 형식이어야 해요');
+  if (start === null) throw new ToolError('end_time 은 due_time(시작 시각)이 있어야 정할 수 있어요');
+  const d = toMinutes(end) - toMinutes(start);
+  if (d <= 0) throw new ToolError(`end_time(${end}) 은 시작 시각(${start})보다 늦어야 해요. 자정을 넘기는 일정은 만들 수 없어요`);
+  return d;
+}
+
 function invalid(errors: readonly FieldError[]): ToolError {
   const list = errors.map((e) => `${FIELD_NAMES[e.field] ?? e.field}: ${e.rule}`).join(', ');
   return new ToolError(`입력값이 올바르지 않아요 → ${list}`);
@@ -134,7 +148,8 @@ function view(t: Task, L: Loaded) {
     id: t.id,
     title: t.title,
     due: t.dueDate ? (t.dueTime ? `${t.dueDate} ${t.dueTime}` : t.dueDate) : null,
-    ...(durationOf(t) !== null ? { duration_minutes: durationOf(t) } : {}),
+    ...(durationOf(t) !== null && t.dueTime ? { end_time: fromMinutes(toMinutes(t.dueTime) + durationOf(t)!), duration_minutes: durationOf(t) } : {}),
+    ...(locationOf(t) ? { location: locationOf(t) } : {}),
     priority: t.priority,
     project: projectName(t, L.projects),
     tags: tagsOf(t),
@@ -235,7 +250,7 @@ export async function searchTasks(ctx: Ctx, a: Args): Promise<unknown> {
   const includeDone = a.include_completed === true;
   const limit = optInt(a, 'limit', 1, 200) ?? 50;
   const hits = liveTasks(L)
-    .filter((t) => (includeDone || !t.done) && (t.title.toLowerCase().includes(query) || tagsOf(t).some((x) => tagKey(x) === tagKey(query.replace(/^#+/, '')))))
+    .filter((t) => (includeDone || !t.done) && (t.title.toLowerCase().includes(query) || (locationOf(t) ?? '').toLowerCase().includes(query) || tagsOf(t).some((x) => tagKey(x) === tagKey(query.replace(/^#+/, '')))))
     .sort((x, y) => {
       const dx = x.dueDate ?? '9999-99-99';
       const dy = y.dueDate ?? '9999-99-99';
@@ -281,13 +296,18 @@ export async function addTask(ctx: Ctx, a: Args): Promise<unknown> {
   const dueTime = optNullableString(a, 'due_time') ?? null;
   const projectArg = optString(a, 'project');
   const recurrence = has(a, 'recurrence') ? parseRecurrence(a.recurrence ?? null) : null;
+  if (has(a, 'end_time') && has(a, 'duration_minutes') && a.end_time != null && a.duration_minutes != null) {
+    throw new ToolError('end_time 과 duration_minutes 는 둘 중 하나만 넣으세요');
+  }
+  const durationMin = has(a, 'end_time') && a.end_time != null && a.end_time !== '' ? durationFromEnd(dueTime, a.end_time) : (optInt(a, 'duration_minutes', 5, 1439) ?? null);
   const hlc = createHlc(ctx.deviceId);
   const task: Task = {
     id: randomUUID(),
     title: title.value,
     dueDate,
     dueTime,
-    durationMin: optInt(a, 'duration_minutes', 5, 1439) ?? null, // 시각이 없으면 검증이 거절한다
+    durationMin, // 시각이 없으면 검증이 거절한다
+    location: normalizeLocation(optNullableString(a, 'location')),
     projectId: projectArg !== undefined ? resolveProject(projectArg, L.projects) : INBOX_ID,
     priority: (optInt(a, 'priority', 1, 4) ?? 4) as Priority,
     recurrence,
@@ -321,7 +341,11 @@ export async function updateTask(ctx: Ctx, a: Args): Promise<unknown> {
   if (dueDate !== undefined) candidate.dueDate = dueDate;
   const dueTime = optNullableString(a, 'due_time');
   if (dueTime !== undefined) candidate.dueTime = dueTime;
+  if (has(a, 'end_time') && has(a, 'duration_minutes')) throw new ToolError('end_time 과 duration_minutes 는 둘 중 하나만 넣으세요');
   if (has(a, 'duration_minutes')) candidate.durationMin = a.duration_minutes === null ? null : (optInt(a, 'duration_minutes', 5, 1439) ?? null);
+  if (has(a, 'end_time')) candidate.durationMin = a.end_time === null || a.end_time === '' ? null : durationFromEnd(candidate.dueTime, a.end_time);
+  const location = optNullableString(a, 'location');
+  if (location !== undefined) candidate.location = normalizeLocation(location);
   const priority = optInt(a, 'priority', 1, 4);
   if (priority !== undefined) candidate.priority = priority as Priority;
   const projectArg = optString(a, 'project');
@@ -332,8 +356,8 @@ export async function updateTask(ctx: Ctx, a: Args): Promise<unknown> {
   if (reminders !== undefined) candidate.reminders = reminders as ReminderKind[];
   if (has(a, 'recurrence')) candidate.recurrence = parseRecurrence(a.recurrence ?? null);
 
-  const changed = ['title', 'due_date', 'due_time', 'duration_minutes', 'priority', 'project', 'tags', 'reminders', 'recurrence'].some((k) => has(a, k));
-  if (!changed) throw new ToolError('바꿀 항목이 없어요 (title, due_date, due_time, duration_minutes, priority, project, tags, reminders, recurrence 중 하나 이상)');
+  const changed = ['title', 'due_date', 'due_time', 'end_time', 'duration_minutes', 'location', 'priority', 'project', 'tags', 'reminders', 'recurrence'].some((k) => has(a, k));
+  if (!changed) throw new ToolError('바꿀 항목이 없어요 (title, due_date, due_time, end_time, duration_minutes, location, priority, project, tags, reminders, recurrence 중 하나 이상)');
 
   if (dueDate === null) {
     // 기한을 없애면 기한에 딸린 시각·반복·알림도 함께 없앤다 (앱과 같은 규칙)
@@ -342,7 +366,7 @@ export async function updateTask(ctx: Ctx, a: Args): Promise<unknown> {
     candidate.reminders = [];
   }
   // 시각을 없애면 길이도 함께 없앤다 (앱과 같은 규칙). 시각 없이 길이만 새로 주면 검증이 거절한다.
-  if (dueDate === null || (dueTime === null && !has(a, 'duration_minutes'))) candidate.durationMin = null;
+  if (dueDate === null || (dueTime === null && !has(a, 'duration_minutes') && !has(a, 'end_time'))) candidate.durationMin = null;
   // 시각을 더하거나 없애면 알림 종류를 맞춘다 (앱의 편집 화면과 같은 규칙)
   if (reminders === undefined && dueDate !== null && (current.dueTime !== null) !== (candidate.dueTime !== null)) {
     candidate.reminders = remapReminders(current.reminders, current.dueTime !== null, candidate.dueTime !== null).reminders;

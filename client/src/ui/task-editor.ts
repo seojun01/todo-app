@@ -1,6 +1,6 @@
 // 할 일 추가·수정 시트: 제목·기한·시각·반복·알림·프로젝트·태그·우선순위.
 import type { App } from '../app.ts';
-import { INBOX_ID, MAX_TAG, MAX_TAGS, MAX_TITLE, durationOf, effectiveProjectId, parseTags, tagKey, tagsOf, type FieldError, type Priority } from '../../../shared/task.ts';
+import { INBOX_ID, MAX_LOCATION, MAX_TAG, MAX_TAGS, MAX_TITLE, durationOf, locationOf, fromMinutes, isValidTime, toMinutes, effectiveProjectId, parseTags, tagKey, tagsOf, type FieldError, type Priority } from '../../../shared/task.ts';
 import { listProjects } from '../store/projects.ts';
 import { tagSummaries } from '../views.ts';
 import { createRecurrenceField } from './recurrence-field.ts';
@@ -18,7 +18,7 @@ export interface EditorOptions {
   opener?: HTMLElement | null;
 }
 
-const FIELD_LABELS: Record<string, string> = { title: '제목', dueDate: '기한', dueTime: '기한 시각', durationMin: '길이', reminders: '알림', priority: '우선순위', tags: '태그' };
+const FIELD_LABELS: Record<string, string> = { title: '제목', dueDate: '기한', dueTime: '기한 시각', durationMin: '길이', location: '장소', reminders: '알림', priority: '우선순위', tags: '태그' };
 
 /** 길이 선택지(분). 이 밖의 값(캘린더에서 끌어 늘린 길이)은 그 값이 선택지에 더해진다. */
 const DURATION_CHOICES = [15, 30, 45, 60, 90, 120, 180, 240];
@@ -43,6 +43,7 @@ export function describeErrors(errors: FieldError[]): string {
     if (e.rule === 'requires-dueTime') return '길이는 기한 시각이 있어야 정할 수 있어요.';
     return '일정 길이가 올바르지 않아요.';
   }
+  if (e.field === 'location') return `장소는 ${MAX_LOCATION}자까지 입력할 수 있어요.`;
   if (e.field === 'reminders') return '고른 알림을 이 기한에는 쓸 수 없어요. 시각이 있으면 정시·10분 전·30분 전·1시간 전·하루 전, 없으면 당일·하루 전이에요.';
   if (e.field === 'tags') {
     if (e.rule === 'count') return `태그는 ${MAX_TAGS}개까지 붙일 수 있어요.`;
@@ -145,8 +146,32 @@ export async function openTaskEditor(app: App, opts: EditorOptions = {}): Promis
   });
   // 길이: 시작 시각이 있을 때만 고를 수 있다 (캘린더에서 그 길이의 블록으로 보인다)
   const durationSelect = h('select', { id: 'editor-duration' });
-  const durationHint = h('p', { class: 'hint' }, '먼저 기한 시각을 정하세요. 길이에는 시각이 필요해요.');
+  const durationHint = h('p', { class: 'hint' }, '먼저 기한 시각을 정하세요. 끝 시각과 길이에는 시각이 필요해요.');
   const durationField = h('div', { class: 'field' }, h('label', { for: 'editor-duration' }, '길이'), durationSelect, durationHint);
+  // 끝 시각: 길이와 같은 값을 다르게 보여 준다. 끝 시각을 넣으면 길이가, 길이를 고르면 끝 시각이 맞춰진다.
+  const endInput = h('input', { type: 'time', id: 'editor-end' });
+  const endField = h('div', { class: 'field' }, h('label', { for: 'editor-end' }, '끝 시각'), endInput);
+  /** 끝 시각 입력으로 정한 길이(분). 비어 있으면 null, 시작보다 이르면 0 이하 */
+  const endDuration = (): number | null => {
+    const start = reminder.readTime();
+    if (start === null || !isValidTime(endInput.value)) return null;
+    return toMinutes(endInput.value) - toMinutes(start);
+  };
+  endInput.addEventListener('input', () => {
+    if (endInput.value === '') return void (durationSelect.value = '');
+    const d = endDuration();
+    if (d !== null && d >= 5) fillDurations(d);
+  });
+  // 시작 시각이나 길이가 바뀔 때만 끝 시각을 다시 계산한다 (입력 중이거나 잘못 넣은 끝 시각을 저장 버튼 클릭 등으로 덮어쓰지 않도록)
+  let shownFor = '';
+  const showEnd = (): void => {
+    const start = reminder.readTime();
+    const d = durationSelect.value === '' ? null : Number(durationSelect.value);
+    const key = `${start}|${d}`;
+    if (key === shownFor) return;
+    shownFor = key;
+    endInput.value = start !== null && d !== null && toMinutes(start) + d < 1440 ? fromMinutes(toMinutes(start) + d) : '';
+  };
   const fillDurations = (current: number | null): void => {
     const values = new Set<number>([...DURATION_CHOICES, ...(current !== null ? [current] : [])]);
     durationSelect.replaceChildren(
@@ -159,8 +184,11 @@ export async function openTaskEditor(app: App, opts: EditorOptions = {}): Promis
   const syncDuration = (): void => {
     const hasTime = reminder.readTime() !== null;
     durationSelect.disabled = !hasTime;
+    endInput.disabled = !hasTime;
     durationHint.hidden = hasTime;
     if (!hasTime) durationSelect.value = '';
+    // 시작 시각을 바꾸면 길이를 유지하고 끝 시각이 밀린다
+    showEnd();
   };
   void app.notify.state().then((s) => {
     deviceNotice = editorNotice(s);
@@ -185,6 +213,9 @@ export async function openTaskEditor(app: App, opts: EditorOptions = {}): Promis
     },
     '기한 없음',
   );
+  const locationInput = h('input', { type: 'text', id: 'editor-location', autocomplete: 'off', maxlength: String(MAX_LOCATION), placeholder: '예: 강남역 스타벅스' });
+  locationInput.value = task ? (locationOf(task) ?? '') : '';
+  const locationField = h('div', { class: 'field' }, h('label', { for: 'editor-location' }, '장소'), locationInput);
   const errorBox = h('p', { class: 'error', role: 'alert' });
   errorBox.hidden = true;
   const hint = h('p', { class: 'hint' });
@@ -204,7 +235,9 @@ export async function openTaskEditor(app: App, opts: EditorOptions = {}): Promis
     h('div', { class: 'field' }, h('label', { for: 'editor-title' }, '제목'), titleInput, hint),
     h('div', { class: 'field' }, h('label', { for: 'editor-date' }, '기한'), h('div', { class: 'row' }, dateInput, clearDate)),
     reminder.timeElement,
+    endField,
     durationField,
+    locationField,
     h('div', { class: 'field' }, h('label', { for: 'editor-project' }, '프로젝트'), projectSelect),
     h(
       'div',
@@ -244,15 +277,23 @@ export async function openTaskEditor(app: App, opts: EditorOptions = {}): Promis
     try {
       const dueDate = dateInput.value === '' ? null : dateInput.value;
       const dueTime = reminder.readTime();
+      const endD = endDuration();
+      if (dueTime !== null && endInput.value !== '' && (endD === null || endD < 5)) {
+        errorBox.textContent = '끝 시각은 시작 시각보다 5분 이상 뒤여야 해요. 자정을 넘기는 일정은 만들 수 없어요.';
+        errorBox.hidden = false;
+        endInput.focus();
+        return;
+      }
       const durationMin = dueTime !== null && durationSelect.value !== '' ? Number(durationSelect.value) : null;
+      const location = locationInput.value.trim() === '' ? null : locationInput.value.trim();
       const reminders = reminder.readReminders();
       const projectId = projectSelect.value;
       const recurrence = repeat.readRule();
       const tags = parseTags(tagsInput.value);
       const priority = Number(form.querySelector<HTMLInputElement>('input[name="editor-priority"]:checked')?.value ?? 4) as Priority;
       const result = editing
-        ? await app.tasks.editTask(task.id, { title: titleInput.value, dueDate, dueTime, durationMin, reminders, priority, recurrence, tags, ...(projectId !== initialProject ? { projectId } : {}) })
-        : await app.tasks.addTask({ title: titleInput.value, dueDate, dueTime, durationMin, reminders, projectId, priority, recurrence, tags });
+        ? await app.tasks.editTask(task.id, { title: titleInput.value, dueDate, dueTime, durationMin, location, reminders, priority, recurrence, tags, ...(projectId !== initialProject ? { projectId } : {}) })
+        : await app.tasks.addTask({ title: titleInput.value, dueDate, dueTime, durationMin, location, reminders, projectId, priority, recurrence, tags });
       if (!result.ok) {
         errorBox.textContent = describeErrors(result.errors);
         errorBox.hidden = false;

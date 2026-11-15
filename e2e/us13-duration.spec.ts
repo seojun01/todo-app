@@ -41,3 +41,29 @@ test('자정을 넘기는 길이는 저장되지 않고 안내가 나온다', as
   await expect(dialog.getByRole('alert')).toContainText('자정');
   await expect(dialog).toBeVisible();
 });
+
+test('끝 시각: 넣으면 길이가 맞춰지고, 길이를 고르거나 시작을 바꾸면 끝 시각이 따라 바뀐다', async ({ page }) => {
+  await openApp(page);
+  await quickAdd(page, '팀 회의');
+  let dialog = await openEditor(page, '팀 회의');
+  const end = dialog.getByLabel('끝 시각');
+  await expect(end).toBeDisabled();
+  await dialog.getByLabel('기한', { exact: true }).fill('2026-11-12');
+  await dialog.getByLabel('기한 시각').fill('14:00');
+  await expect(end).toBeEnabled();
+  await end.fill('16:20');
+  await expect(dialog.getByLabel('길이')).toHaveValue('140');
+  await dialog.getByRole('button', { name: '저장' }).click();
+  await expect(dialog).toBeHidden();
+
+  dialog = await openEditor(page, '팀 회의');
+  await expect(dialog.getByLabel('끝 시각')).toHaveValue('16:20');
+  await dialog.getByLabel('길이').selectOption({ label: '1시간' });
+  await expect(dialog.getByLabel('끝 시각')).toHaveValue('15:00');
+  await dialog.getByLabel('기한 시각').fill('09:00');
+  await expect(dialog.getByLabel('끝 시각')).toHaveValue('10:00');
+  await dialog.getByLabel('끝 시각').fill('08:00');
+  await dialog.getByRole('button', { name: '저장' }).click();
+  await expect(dialog.getByRole('alert')).toContainText('끝 시각');
+  await expect(dialog).toBeVisible();
+});

@@ -5,6 +5,7 @@ import { canonicalRule, firstOccurrenceOnOrAfter, nextOccurrence } from '../../s
 import {
   INBOX_ID,
   isValidTag,
+  normalizeLocation,
   normalizeTags,
   tagKey,
   tagsOf,
@@ -29,6 +30,7 @@ export interface AddInput {
   dueDate?: CalendarDate | null;
   dueTime?: ClockTime | null;
   durationMin?: number | null;
+  location?: string | null;
   projectId?: string;
   priority?: Priority;
   recurrence?: Recurrence | null;
@@ -37,7 +39,7 @@ export interface AddInput {
 }
 
 export type EditChanges = Partial<
-  Pick<Task, 'title' | 'dueDate' | 'dueTime' | 'durationMin' | 'projectId' | 'priority' | 'recurrence' | 'reminders' | 'tags' | 'sortKey'>
+  Pick<Task, 'title' | 'dueDate' | 'dueTime' | 'durationMin' | 'location' | 'projectId' | 'priority' | 'recurrence' | 'reminders' | 'tags' | 'sortKey'>
 >;
 
 /** 태그를 일괄로 바꾸기 전의 한 할 일의 태그 (되돌리기용) */
@@ -100,6 +102,7 @@ export function createTaskOps(ctx: Ctx): TaskOps {
         dueDate,
         dueTime: input.dueTime ?? null,
         durationMin: input.dueTime ? (input.durationMin ?? null) : null,
+        location: normalizeLocation(input.location),
         projectId: input.projectId ?? INBOX_ID,
         priority: input.priority ?? 4,
         recurrence: input.recurrence ?? null,
@@ -126,6 +129,7 @@ export function createTaskOps(ctx: Ctx): TaskOps {
         candidate.title = t.value;
       }
       if (changes.tags !== undefined) candidate.tags = normalizeTags(changes.tags);
+      if (changes.location !== undefined) candidate.location = normalizeLocation(changes.location);
       if (changes.dueDate === null) {
         // 기한을 없애면 기한에 딸린 시각·반복·알림도 함께 없앤다
         candidate.dueTime = null;

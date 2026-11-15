@@ -3,7 +3,7 @@
 import type { App } from '../app.ts';
 import { addDays, parseDate, startOfWeek, weekday } from '../../../shared/calendar.ts';
 import { layoutSpans, spanEnd, type TimeSpan } from '../../../shared/calendar-layout.ts';
-import { DEFAULT_DURATION, durationOf, toMinutes } from '../../../shared/task.ts';
+import { DEFAULT_DURATION, durationOf, locationOf, toMinutes } from '../../../shared/task.ts';
 import { sortTasks } from '../../../shared/sort.ts';
 import { dayName, formatLong, formatRange } from '../format.ts';
 import { eventMinutesOn, eventsByDate, loadEvents, safeColor, wholeDay, type CalendarEvent } from '../gcal-events.ts';
@@ -196,7 +196,7 @@ export async function renderTimeGrid(app: App, root: HTMLElement, o: TimeGridOpt
             'data-color': label.color,
             'data-priority': String(t.priority),
             'data-key': `${ghost ? 'tg-ghost' : 'tg-task'}:${t.id}:${date}`,
-            title: `${t.title} · ${range}`,
+            title: `${t.title} · ${range}${locationOf(t) ? ` · ${locationOf(t)}` : ''}`,
             onclick: (ev: Event) => openTaskEditor(app, { task: t, opener: ev.currentTarget as HTMLElement }),
             onkeydown: ghost ? null : (ev: Event) => onDeleteKey(app, t, ev as KeyboardEvent),
           },

@@ -155,6 +155,42 @@ describe('MCP 도구 (실제 서버 대상)', () => {
     await assert.rejects(addTask(s.ctx, { title: '자정 넘김', due_date: '2026-11-20', due_time: '23:30', duration_minutes: 60 }), (e: Error) => /durationMin: crosses-midnight/.test(e.message));
   });
 
+  it('끝 시각: end_time 으로 길이를 정하고, 목록에 끝 시각이 보이며, 잘못된 값은 오류다', async () => {
+    const r = (await addTask(s.ctx, { title: '회의', due_date: '2026-11-20', due_time: '14:00', end_time: '16:30' })) as Json;
+    assert.equal(r.added.duration_minutes, 150);
+    assert.equal(r.added.end_time, '16:30');
+    const moved = (await updateTask(s.ctx, { id: r.added.id, due_time: '15:00' })) as Json;
+    assert.equal(moved.updated.end_time, '17:30', '시작만 바꾸면 길이가 유지돼 끝도 밀린다');
+    const both = (await updateTask(s.ctx, { id: r.added.id, due_time: '09:00', end_time: '09:45' })) as Json;
+    assert.equal(both.updated.due, '2026-11-20 09:00');
+    assert.equal(both.updated.duration_minutes, 45, '바뀐 시작 시각 기준으로 계산');
+    const end = (await updateTask(s.ctx, { id: r.added.id, end_time: '12:00' })) as Json;
+    assert.equal(end.updated.end_time, '12:00');
+    const cleared = (await updateTask(s.ctx, { id: r.added.id, end_time: null })) as Json;
+    assert.equal(cleared.updated.end_time, undefined);
+    const noLen = (await addTask(s.ctx, { title: '시작만', due_date: '2026-11-20', due_time: '13:00' })) as Json;
+    assert.equal(noLen.added.end_time, undefined);
+    await assert.rejects(addTask(s.ctx, { title: '거꾸로', due_date: '2026-11-20', due_time: '14:00', end_time: '13:00' }), (e: Error) => /시작 시각.*보다 늦어야/.test(e.message));
+    await assert.rejects(addTask(s.ctx, { title: '시작 없음', due_date: '2026-11-20', end_time: '13:00' }), (e: Error) => /due_time/.test(e.message));
+    await assert.rejects(addTask(s.ctx, { title: '형식', due_date: '2026-11-20', due_time: '13:00', end_time: '25:00' }), (e: Error) => /HH:MM/.test(e.message));
+    await assert.rejects(addTask(s.ctx, { title: '둘 다', due_date: '2026-11-20', due_time: '13:00', end_time: '14:00', duration_minutes: 60 }), (e: Error) => /둘 중 하나/.test(e.message));
+  });
+
+  it('장소: location 으로 정하고 바꾸고 지울 수 있고, 검색에도 걸린다', async () => {
+    const r = (await addTask(s.ctx, { title: '미팅', due_date: '2026-11-20', due_time: '14:00', location: '  강남역 2번 출구 ' })) as Json;
+    assert.equal(r.added.title, '미팅');
+    assert.equal(r.added.location, '강남역 2번 출구');
+    const found = (await searchTasks(s.ctx, { query: '강남' })) as Json;
+    assert.ok(JSON.stringify(found).includes(r.added.id));
+    const u = (await updateTask(s.ctx, { id: r.added.id, location: '판교' })) as Json;
+    assert.equal(u.updated.location, '판교');
+    const kept = (await updateTask(s.ctx, { id: r.added.id, title: '팀 미팅' })) as Json;
+    assert.equal(kept.updated.location, '판교', '다른 항목만 바꾸면 장소는 그대로');
+    const cleared = (await updateTask(s.ctx, { id: r.added.id, location: null })) as Json;
+    assert.equal(cleared.updated.location, undefined);
+    await assert.rejects(addTask(s.ctx, { title: '긴 장소', location: 'x'.repeat(201) }), (e: Error) => /location: length/.test(e.message));
+  });
+
   it('완료: 일반 할 일은 done, 이미 완료면 알려 준다, 다시 열 수 있다', async () => {
     const r = (await addTask(s.ctx, { title: '한 번만 할 일', due_date: TODAY })) as Json;
     const c = (await completeTask(s.ctx, { id: r.added.id })) as Json;

@@ -10,7 +10,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { addDays } from '../../shared/calendar.ts';
 import { describeRecurrence } from '../../shared/recurrence.ts';
-import { INBOX_ID, durationOf, isValidDate, tagsOf, type Task } from '../../shared/task.ts';
+import { INBOX_ID, durationOf, isValidDate, locationOf, tagsOf, type Task } from '../../shared/task.ts';
 import type { AuthedRoute, PublicRoute } from './api.ts';
 import { transaction, type Db } from './db.ts';
 import { HttpError, readJson, sendJson } from './http.ts';
@@ -68,6 +68,7 @@ export interface GcalEvent {
   start: { date: string } | { dateTime: string; timeZone: string };
   end: { date: string } | { dateTime: string; timeZone: string };
   colorId?: string;
+  location?: string;
   reminders: { useDefault: false };
   extendedProperties: { private: { todoTaskId: string } };
 }
@@ -105,6 +106,8 @@ export function eventFor(task: Task, projectName: string, timeZone: string): Gca
     description: lines.join('\n'),
     start,
     end,
+    // 장소가 없으면 필드를 싣지 않는다 (예전에 올린 일정과 지문이 같게). PUT 이라 빼면 구글 쪽 장소도 지워진다
+    ...(locationOf(task) ? { location: locationOf(task)! } : {}),
     ...(PRIORITY_COLOR[task.priority] ? { colorId: PRIORITY_COLOR[task.priority] } : {}),
     // 알림은 앱이 보낸다. 캘린더 쪽 기본 알림이 겹쳐 울리지 않게 끈다.
     reminders: { useDefault: false },

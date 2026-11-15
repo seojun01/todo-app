@@ -116,6 +116,14 @@ test('변환: 시각이 있으면 30분 일정, 자정을 넘기면 다음 날�
   assert.deepEqual(b.end, { dateTime: '2026-12-01T00:20:00', timeZone: 'Asia/Seoul' });
 });
 
+test('변환: 장소가 있으면 일정의 location 으로, 없으면 필드를 싣지 않는다', () => {
+  const a = eventFor(mkTask({ dueDate: '2026-11-20', dueTime: '13:00', location: '강남역' }) as unknown as Task, '업무', 'Asia/Seoul')!;
+  assert.equal(a.location, '강남역');
+  assert.ok(!a.summary.includes('강남역'), '장소는 제목에 붙이지 않는다');
+  const b = eventFor(mkTask({ dueDate: '2026-11-20' }) as unknown as Task, '업무', 'Asia/Seoul')!;
+  assert.equal('location' in b, false);
+});
+
 test('변환: 시각이 없으면 종일 일정이고 끝 날짜는 다음 날이다', () => {
   const e = eventFor(mkTask({ dueDate: '2026-11-30' }) as unknown as Task, '수신함', 'Asia/Seoul')!;
   assert.deepEqual(e.start, { date: '2026-11-30' });

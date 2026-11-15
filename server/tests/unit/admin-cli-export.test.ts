@@ -47,7 +47,7 @@ test('export: 서버의 기준 사본을 내보내기 형식으로 stdout 에 �
   assert.deepEqual(out.projects.map((p: { id: string }) => p.id), [project.id]);
   assert.equal(out.tasks.length, 1);
   assert.deepEqual(out.tasks[0], {
-    id: live.id, title: '살아 있는 일', dueDate: '2026-11-20', dueTime: '09:00', durationMin: null, projectId: project.id, priority: 1,
+    id: live.id, title: '살아 있는 일', dueDate: '2026-11-20', dueTime: '09:00', durationMin: null, location: null, projectId: project.id, priority: 1,
     recurrence: { unit: 'week', interval: 1, weekdays: [1] }, reminders: ['at'], tags: ['집'], done: false, createdAt: live.createdAt,
   });
   assert.deepEqual(out.settings, { defaultReminderTime: '07:45' });

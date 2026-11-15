@@ -154,6 +154,10 @@ const MIGRATIONS: Migration[] = [
   (db) => {
     db.exec(`ALTER TABLE tasks ADD COLUMN sort_key TEXT;`);
   },
+  // v7: 장소. 비어 있어도 되고, 옛 클라이언트가 보내지 않아도 된다 (그때는 저장된 장소를 지키지 않고 받은 그대로 둔다 — sync.ts 참고)
+  (db) => {
+    db.exec(`ALTER TABLE tasks ADD COLUMN location TEXT;`);
+  },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

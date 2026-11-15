@@ -47,7 +47,7 @@ test('할 일에는 제목·기한 날짜와 시각·프로젝트·우선순위�
   });
   const out = buildExport([project(P1)], [full], settings, NOW);
   assert.deepEqual(out.tasks[0], {
-    id: full.id, title: '공과금 납부', dueDate: '2026-11-25', dueTime: '09:00', durationMin: 90, projectId: P1, priority: 2,
+    id: full.id, title: '공과금 납부', dueDate: '2026-11-25', dueTime: '09:00', durationMin: 90, location: null, projectId: P1, priority: 2,
     recurrence: { unit: 'month', interval: 1, dayOfMonth: 25 }, reminders: ['1d', 'at'], tags: ['집', 'Urgent'], done: false, createdAt: full.createdAt,
   });
 });

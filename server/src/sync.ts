@@ -32,6 +32,8 @@ export const rowToTask = (r: Row): Task => ({
   dueDate: r.due_date ?? null,
   dueTime: r.due_time ?? null,
   durationMin: r.duration_min ?? null,
+  // 장소가 없는 할 일에는 필드를 싣지 않는다 (옛 레코드와 모양이 같게)
+  ...(r.location != null ? { location: r.location as string } : {}),
   projectId: r.project_id,
   priority: r.priority,
   recurrence: r.recurrence ? JSON.parse(r.recurrence) : null,
@@ -131,20 +133,22 @@ export function applyChanges(db: Db, body: unknown, now: Date = new Date()): { a
           continue;
         }
         const armedAt = !existing || alarmKey(existing) !== alarmKey(incoming) ? nowIso : (row!.armed_at as string);
+        // 장소를 모르는 옛 기기가 고친 레코드에는 location 필드가 없다: 저장된 장소를 지킨다
+        const location = incoming.location === undefined ? (existing?.location ?? null) : incoming.location;
         const params = [
-          incoming.title, incoming.dueDate, incoming.dueTime, incoming.durationMin ?? null, incoming.projectId, incoming.priority,
+          incoming.title, incoming.dueDate, incoming.dueTime, incoming.durationMin ?? null, location, incoming.projectId, incoming.priority,
           incoming.recurrence ? JSON.stringify(incoming.recurrence) : null, JSON.stringify(incoming.reminders), JSON.stringify(tagsOf(incoming)), incoming.sortKey ?? null,
           incoming.done ? 1 : 0, incoming.createdAt, incoming.deleted ? 1 : 0, incoming.version, incoming.updatedBy, bump(), armedAt,
         ] as const;
         if (existing) {
           db.prepare(
-            `UPDATE tasks SET title=?, due_date=?, due_time=?, duration_min=?, project_id=?, priority=?, recurrence=?, reminders=?, tags=?, sort_key=?, done=?,
+            `UPDATE tasks SET title=?, due_date=?, due_time=?, duration_min=?, location=?, project_id=?, priority=?, recurrence=?, reminders=?, tags=?, sort_key=?, done=?,
              created_at=?, deleted=?, version=?, updated_by=?, seq=?, armed_at=? WHERE id=?`,
           ).run(...params, incoming.id);
         } else {
           db.prepare(
-            `INSERT INTO tasks (title, due_date, due_time, duration_min, project_id, priority, recurrence, reminders, tags, sort_key, done,
-             created_at, deleted, version, updated_by, seq, armed_at, id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+            `INSERT INTO tasks (title, due_date, due_time, duration_min, location, project_id, priority, recurrence, reminders, tags, sort_key, done,
+             created_at, deleted, version, updated_by, seq, armed_at, id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           ).run(...params, incoming.id);
         }
         applied++;

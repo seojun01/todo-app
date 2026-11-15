@@ -241,6 +241,28 @@ test('길이: push 한 durationMin 은 pull 로 그대로 나오고, 없이 올�
   await srv.close();
 });
 
+test('장소: push 한 location 은 pull 로 나오고, location 없이 올린 옛 기기의 수정은 저장된 장소를 지우지 않으며, null 은 지운다', async () => {
+  const srv = await startTestServer();
+  const { cookie: c } = await srv.pair();
+  const push = (rec: Record<string, any>) => srv.api('/api/changes', { cookie: c, body: { changes: [{ type: 'task', record: rec }] } });
+  const pull = async () => ((await (await srv.api('/api/changes?since=0', { cookie: c })).json()) as { changes: { record: any }[] }).changes.map((x) => x.record);
+
+  const t = mkTask({ title: '미팅', location: '강남역' });
+  assert.equal((await push(t)).status, 200);
+  assert.equal((await pull()).find((r) => r.id === t.id)!.location, '강남역');
+  const { location: _omit, ...legacy } = { ...t, title: '미팅 (옛 앱에서 고침)', version: '001762950896789-999998-dev' } as Record<string, unknown>;
+  assert.equal((await push(legacy)).status, 200);
+  const after = (await pull()).find((r) => r.id === t.id)!;
+  assert.equal(after.title, '미팅 (옛 앱에서 고침)');
+  assert.equal(after.location, '강남역', '옛 기기가 고쳐도 장소는 남는다');
+  assert.equal((await push({ ...t, location: null, version: '001762950896789-999999-dev' })).status, 200);
+  assert.equal((await pull()).find((r) => r.id === t.id)!.location, undefined);
+  for (const bad of [' 앞공백', '', 'x'.repeat(201), 3]) {
+    assert.equal((await push(mkTask({ location: bad }))).status, 400, JSON.stringify(bad));
+  }
+  await srv.close();
+});
+
 test('길이: 잘못된 길이(시각 없음·범위 밖·자정 넘김)는 400 이고 아무것도 반영하지 않는다', async () => {
   const srv = await startTestServer();
   const { cookie: c } = await srv.pair();
