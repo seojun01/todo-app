@@ -1,5 +1,6 @@
 # Caddy 설정: TLS(내부 CA) 종료, 정적 파일(PWA) 제공, /api/* 를 Node 서버로 프록시
-# 설치 위치: /etc/caddy/Caddyfile  (deploy/install.sh 가 복사한다)
+# 설치 위치: /etc/caddy/sites/todo.home.arpa.caddy  (deploy/install.sh → deploy/caddy-site.sh 가 사이트 블록만 설치한다.
+#           /etc/caddy/Caddyfile 은 이 폴더를 import 할 뿐이라 같은 Caddy 의 다른 앱 설정을 지우지 않는다)
 #
 # 주소는 사용하는 내부 DNS 의 이름과 같아야 한다.
 todo.home.arpa {

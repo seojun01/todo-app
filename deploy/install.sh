@@ -60,7 +60,8 @@ WRAP
 chmod 0755 /usr/local/bin/todo-admin
 
 echo "==> Caddy 설정"
-install -m 0644 "$SRC/deploy/Caddyfile" /etc/caddy/Caddyfile
+# 공유 Caddyfile 을 덮어쓰지 않고 /etc/caddy/sites/todo.home.arpa.caddy 만 설치한다 (같은 Caddy 의 fitness-app 이 지워지지 않게)
+sh "$SRC/deploy/caddy-site.sh" "$SRC/deploy/Caddyfile"
 systemctl enable caddy >/dev/null
 systemctl reload caddy 2>/dev/null || systemctl restart caddy
 
