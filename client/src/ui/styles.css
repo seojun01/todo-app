@@ -1,45 +1,26 @@
-/* 색상 토큰: 라이트/다크 모두 본문 대비 4.5:1 이상 */
+/* 색상 토큰: 다크 단일 테마, 본문 대비 4.5:1 이상 */
 :root {
-  color-scheme: light dark;
-  --bg: #ffffff;
-  --surface: #f4f5f7;
-  --surface-2: #e9ebef;
-  --text: #1a1a1a;
-  --muted: #565b63;
-  --border: #c9cdd3;
-  --accent: #1d4ed8;
-  --accent-text: #ffffff;
-  --danger: #b3261e;
-  --warn: #8a4b00;
-  --ok: #1b6b34;
-  --focus: #1d4ed8;
-  --p1: #b3261e;
-  --p2: #8a4b00;
-  --p3: #1d4ed8;
-  --overdue: #b3261e;
-  --radius: 10px;
+  color-scheme: dark;
+  --bg: #141414;
+  --surface: #1f1f1f;
+  --surface-2: #2a2a2a;
+  --text: #f2f2f2;
+  --muted: #a3a3a3;
+  --border: #333333;
+  --accent: #ff7a1a;
+  --accent-text: #1e0c00;
+  --danger: #ff6b5e;
+  --warn: #ffc24d;
+  --ok: #7bd88f;
+  --focus: #ff7a1a;
+  --p1: #ff6b5e;
+  --p2: #ffc24d;
+  --p3: #8ab4f8;
+  --hot: #ffc24d;
+  --overdue: #ff6b5e;
+  --radius: 14px;
   --gap: 12px;
   --font: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Segoe UI', sans-serif;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #121212;
-    --surface: #1e1f22;
-    --surface-2: #2a2c30;
-    --text: #ececec;
-    --muted: #a9adb3;
-    --border: #44474d;
-    --accent: #8ab4f8;
-    --accent-text: #0b1d3a;
-    --danger: #ff8a80;
-    --warn: #ffb74d;
-    --ok: #81c995;
-    --focus: #8ab4f8;
-    --p1: #ff8a80;
-    --p2: #ffb74d;
-    --p3: #8ab4f8;
-    --overdue: #ff8a80;
-  }
 }
 
 *,
