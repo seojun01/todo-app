@@ -26,6 +26,13 @@ export async function todayView(db: IDBDatabase, today: string): Promise<TodayVi
   };
 }
 
+/** 오늘 화면 요약: 오늘 몫 중 끝낸 수·남은 수·전체 (기한 지난 할 일은 별도 구역이라 세지 않는다) */
+export function todayProgress(v: Pick<TodayView, 'today' | 'completed'>): { done: number; total: number; left: number } {
+  const done = v.completed.length;
+  const left = v.today.length;
+  return { done, total: done + left, left };
+}
+
 export interface ProjectTasks {
   open: StoredTask[];
   completed: StoredTask[];

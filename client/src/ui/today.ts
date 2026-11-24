@@ -2,7 +2,7 @@
 import type { ViewRenderer } from '../app.ts';
 import { formatLong } from '../format.ts';
 import { eventsByDate, loadEvents } from '../gcal-events.ts';
-import { projectLabels, todayView } from '../views.ts';
+import { projectLabels, todayProgress, todayView } from '../views.ts';
 import { h } from './dom.ts';
 import { renderEventList } from './event-list.ts';
 import { renderCompleted, renderQuickAdd, renderTaskList } from './task-list.ts';
@@ -13,6 +13,18 @@ export const renderToday: ViewRenderer = async (app, root) => {
   const rowOpts = { today, projects: await projectLabels(app.ctx.db), reorderable: true };
 
   root.appendChild(h('div', { class: 'view-header' }, h('h2', {}, '오늘'), h('p', { class: 'view-sub' }, formatLong(today))));
+  const { done, total, left } = todayProgress(v);
+  if (total > 0) {
+    root.appendChild(
+      h(
+        'div',
+        { class: 'today-summary' },
+        h('span', { class: 'ring', style: `--pct:${Math.round((done / total) * 100)}`, 'aria-hidden': 'true' }, h('span', { class: 'ring-num' }, `${done}/${total}`)),
+        h('p', { class: 'today-summary-text' }, left > 0 ? `오늘 ${left}개 남았어요` : '오늘 할 일을 모두 끝냈어요'),
+        h('span', { class: 'sr-only' }, `오늘 ${total}개 중 ${done}개 완료`),
+      ),
+    );
+  }
   // 오늘의 구글 캘린더 일정 (불러오기를 켜지 않았거나 실패하면 없다)
   const todayEvents = renderEventList(eventsByDate(await loadEvents(app, today, today), today, today).get(today) ?? [], today);
   if (todayEvents) root.appendChild(todayEvents);

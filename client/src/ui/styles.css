@@ -233,6 +233,41 @@ textarea {
   color: var(--muted);
   margin: 0;
 }
+.today-summary {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 8px 0 16px;
+}
+.today-summary-text {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+.ring {
+  --pct: 0;
+  position: relative;
+  flex: none;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: conic-gradient(var(--accent) calc(var(--pct) * 1%), var(--surface-2) 0);
+  display: grid;
+  place-items: center;
+}
+.ring::after {
+  content: '';
+  position: absolute;
+  inset: 7px;
+  border-radius: 50%;
+  background: var(--bg);
+}
+.ring-num {
+  position: relative;
+  z-index: 1;
+  font-size: 0.85rem;
+  font-weight: 800;
+}
 .section {
   margin: 20px 0;
 }
