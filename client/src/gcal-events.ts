@@ -24,6 +24,8 @@ const cache = new Map<string, { at: number; events: CalendarEvent[] }>();
 const inflight = new Map<string, Promise<CalendarEvent[]>>();
 
 // ── 이 기기에 보관 (오프라인용) ──
+/** 응답 없이 매달리는 네트워크(끊기지 않은 채 멈춘 VPN 터널 등)에서 화면 그리기가 이 요청을 무한정 기다리지 않게 한다 */
+const FETCH_TIMEOUT_MS = 2500;
 const STORE_PREFIX = 'todo.gcal-events.v1:';
 /** 보던 범위(달·주)별 사본을 이만큼만 남기고 오래된 것부터 지운다 */
 export const STORE_MAX = 12;
@@ -111,7 +113,7 @@ export async function loadEvents(app: App, from: string, to: string): Promise<Ca
   if (pending) return pending;
   const p = (async () => {
     try {
-      const res = await fetch(`/api/gcal/events?from=${from}&to=${to}`, { credentials: 'same-origin' });
+      const res = await fetch(`/api/gcal/events?from=${from}&to=${to}`, { credentials: 'same-origin', signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
       if (res.status === 401) {
         // 이 기기의 등록이 해제됐다: 서버의 일정을 더는 볼 수 없으니 보관본도 지운다
         cache.clear();
