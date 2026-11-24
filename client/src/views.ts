@@ -26,11 +26,15 @@ export async function todayView(db: IDBDatabase, today: string): Promise<TodayVi
   };
 }
 
-/** 오늘 화면 요약: 오늘 몫 중 끝낸 수·남은 수·전체 (기한 지난 할 일은 별도 구역이라 세지 않는다) */
+/**
+ * 오늘 화면 요약: 링은 끝낸 수/전체, 문구용 left 는 오늘 몫 전부.
+ * 반복 할 일은 완료해도 기한만 다음 회차로 넘어가 미완료로 남으므로 링 계산에서 뺀다 (넣으면 링이 뒤로 간다).
+ * 기한 지난 할 일은 별도 구역이라 세지 않는다.
+ */
 export function todayProgress(v: Pick<TodayView, 'today' | 'completed'>): { done: number; total: number; left: number } {
-  const done = v.completed.length;
-  const left = v.today.length;
-  return { done, total: done + left, left };
+  const done = v.completed.filter((t) => !t.recurrence).length;
+  const open = v.today.filter((t) => !t.recurrence).length;
+  return { done, total: done + open, left: v.today.length };
 }
 
 export interface ProjectTasks {

@@ -14,14 +14,14 @@ export const renderToday: ViewRenderer = async (app, root) => {
 
   root.appendChild(h('div', { class: 'view-header' }, h('h2', {}, '오늘'), h('p', { class: 'view-sub' }, formatLong(today))));
   const { done, total, left } = todayProgress(v);
-  if (total > 0) {
+  if (left > 0 || v.completed.length > 0) {
     root.appendChild(
       h(
         'div',
         { class: 'today-summary' },
-        h('span', { class: 'ring', style: `--pct:${Math.round((done / total) * 100)}`, 'aria-hidden': 'true' }, h('span', { class: 'ring-num' }, `${done}/${total}`)),
+        total > 0 ? h('span', { class: 'ring', style: `--pct:${Math.round((done / total) * 100)}`, 'aria-hidden': 'true' }, h('span', { class: 'ring-num' }, `${done}/${total}`)) : null,
         h('p', { class: 'today-summary-text' }, left > 0 ? `오늘 ${left}개 남았어요` : '오늘 할 일을 모두 끝냈어요'),
-        h('span', { class: 'sr-only' }, `오늘 ${total}개 중 ${done}개 완료`),
+        total > 0 ? h('span', { class: 'sr-only' }, `오늘 ${total}개 중 ${done}개 완료`) : null,
       ),
     );
   }
