@@ -289,12 +289,14 @@ textarea {
   .today-layout > * {
     grid-column: 1;
   }
+  /* 그리드 아이템은 위아래 여백이 합쳐지지 않으므로 구역 사이 간격이 두 배가 되지 않게 반으로 */
+  .today-layout > .section {
+    margin: 10px 0;
+  }
   .today-layout > ul.events {
     grid-column: 2;
     grid-row: 1 / span 20;
     align-self: start;
-    position: sticky;
-    top: 16px;
   }
 }
 .section {
