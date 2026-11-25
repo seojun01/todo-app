@@ -37,6 +37,14 @@ export function todayProgress(v: Pick<TodayView, 'today' | 'completed'>): { done
   return { done, total: done + open, left: v.today.length };
 }
 
+/** 오늘 목록을 우선순위로 나눈다: P1·P2 는 "지금 중요", 나머지는 "나머지". 각 구역 안에서 입력 순서를 지킨다. */
+export function splitByUrgency<T extends { priority: number }>(tasks: readonly T[]): { hot: T[]; rest: T[] } {
+  const hot: T[] = [];
+  const rest: T[] = [];
+  for (const t of tasks) (t.priority <= 2 ? hot : rest).push(t);
+  return { hot, rest };
+}
+
 export interface ProjectTasks {
   open: StoredTask[];
   completed: StoredTask[];
