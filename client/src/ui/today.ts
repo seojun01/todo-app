@@ -11,6 +11,7 @@ export const renderToday: ViewRenderer = async (app, root) => {
   const today = app.today();
   const v = await todayView(app.ctx.db, today);
   const rowOpts = { today, projects: await projectLabels(app.ctx.db), reorderable: true };
+  root.classList.add('today-layout'); // 넓은 화면에서 구글 일정을 오른쪽 칸으로 (CSS)
 
   root.appendChild(h('div', { class: 'view-header' }, h('h2', {}, '오늘'), h('p', { class: 'view-sub' }, formatLong(today))));
   const { done, total, left } = todayProgress(v);
