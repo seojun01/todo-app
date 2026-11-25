@@ -2,7 +2,7 @@
 import type { ViewRenderer } from '../app.ts';
 import { formatLong } from '../format.ts';
 import { eventsByDate, loadEvents } from '../gcal-events.ts';
-import { projectLabels, todayProgress, todayView } from '../views.ts';
+import { projectLabels, splitByUrgency, todayProgress, todayView } from '../views.ts';
 import { h } from './dom.ts';
 import { renderEventList } from './event-list.ts';
 import { renderCompleted, renderQuickAdd, renderTaskList } from './task-list.ts';
@@ -62,8 +62,18 @@ export const renderToday: ViewRenderer = async (app, root) => {
     );
   }
 
-  if (v.today.length > 0) {
-    root.appendChild(h('section', { class: 'section open', 'aria-label': '오늘 할 일' }, renderTaskList(app, v.today, rowOpts)));
+  // 오늘 몫은 우선순위로 두 구역으로 나눈다. 직접 정한 순서(드래그)는 구역 안에서만 의미가 있다.
+  const { hot, rest } = splitByUrgency(v.today);
+  for (const [id, cls, title, group] of [['hot-heading', 'group-hot', '지금 중요', hot], ['rest-heading', 'group-rest', '나머지', rest]] as const) {
+    if (group.length === 0) continue;
+    root.appendChild(
+      h(
+        'section',
+        { class: `section open ${cls}`, 'aria-labelledby': id },
+        h('div', { class: 'section-head' }, h('h3', { id }, `${title} (${group.length})`)),
+        renderTaskList(app, group, rowOpts),
+      ),
+    );
   }
 
   if (v.overdue.length === 0 && v.today.length === 0) {

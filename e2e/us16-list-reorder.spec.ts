@@ -35,7 +35,7 @@ test('오늘: 카드를 끌어 놓으면 순서가 바뀌고, 새로고침해도
   await expect.poll(() => titles(page)).toEqual(['셋', '하나', '둘']);
 });
 
-test('직접 정한 순서는 우선순위를 바꿔도 유지되고, 새로 추가한 할 일은 맨 아래로 간다', async ({ page }) => {
+test('우선순위를 바꾸면 다른 구역으로 옮겨 가고, 새로 추가한 할 일은 그 구역 맨 아래로 간다', async ({ page }) => {
   await openApp(page);
   for (const t of ['A', 'B']) await quickAdd(page, t);
   await dragRow(page, 'B', 'A', 'above');
@@ -44,9 +44,9 @@ test('직접 정한 순서는 우선순위를 바꿔도 유지되고, 새로 추
   await dialog.getByRole('radio', { name: '1 긴급' }).check();
   await dialog.getByRole('button', { name: '저장' }).click();
   await expect(dialog).toBeHidden();
-  await expect.poll(() => titles(page)).toEqual(['B', 'A']);
+  await expect.poll(() => titles(page)).toEqual(['A', 'B']); // A 는 "지금 중요" 구역으로 올라간다
   await quickAdd(page, 'C');
-  await expect.poll(() => titles(page)).toEqual(['B', 'A', 'C']);
+  await expect.poll(() => titles(page)).toEqual(['A', 'B', 'C']);
 });
 
 test('수신함: 키보드로 카드 안에 포커스를 두고 Alt+↑/↓ 로 옮긴다', async ({ page }) => {
